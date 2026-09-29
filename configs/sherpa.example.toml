@@ -1,0 +1,9 @@
+# Paths are resolved relative to this TOML file.
+# Supply a compatible streaming transducer model from the sherpa-onnx model catalog.
+encoder = "../models/streaming/encoder.int8.onnx"
+decoder = "../models/streaming/decoder.onnx"
+joiner = "../models/streaming/joiner.int8.onnx"
+tokens = "../models/streaming/tokens.txt"
+languages = ["zh", "en"]
+threads = 2
+

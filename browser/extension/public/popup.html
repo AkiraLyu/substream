@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Substream</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <h1>Substream <span>实时字幕</span></h1>
+    <label for="token">本地服务配对令牌</label>
+    <input id="token" type="password" autocomplete="off" spellcheck="false" maxlength="64" />
+    <p class="hint">令牌仅保留到浏览器会话结束。</p>
+    <div class="actions">
+      <button id="start">开始当前标签页字幕</button>
+      <button id="stop" disabled>停止</button>
+    </div>
+    <p id="status" role="status" aria-live="polite">未连接</p>
+    <p id="caption" aria-live="polite"><span id="stable"></span><span id="partial"></span></p>
+    <p class="hint">仅处理你主动选择、无保护限制的音频。此入口捕获正在播放的内容。</p>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

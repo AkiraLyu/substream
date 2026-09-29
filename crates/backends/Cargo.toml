@@ -1,0 +1,21 @@
+[package]
+name = "substream-backends"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[features]
+default = []
+sherpa = ["dep:sherpa-onnx"]
+
+[dependencies]
+substream-core.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+sherpa-onnx = { version = "=1.13.8", optional = true }
+
+[lints]
+workspace = true
+

@@ -1,0 +1,31 @@
+[package]
+name = "substream"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[features]
+default = []
+sherpa = ["substream-backends/sherpa"]
+
+[dependencies]
+substream-core.workspace = true
+substream-protocol.workspace = true
+substream-backends.workspace = true
+anyhow.workspace = true
+axum.workspace = true
+clap.workspace = true
+futures-util.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+tokio.workspace = true
+toml.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+tokio-tungstenite = "0.29"
+
+[lints]
+workspace = true
+

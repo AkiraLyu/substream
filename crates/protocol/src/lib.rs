@@ -8,6 +8,8 @@ use substream_core::{
 };
 use thiserror::Error;
 
+pub mod display;
+
 pub const VERSION: u8 = 1;
 pub const HEADER_BYTES: usize = 24;
 pub const MAX_FRAME_BYTES: usize = HEADER_BYTES + MAX_CHUNK_SAMPLES * 2;

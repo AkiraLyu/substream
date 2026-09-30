@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Substream subtitles
+Name[zh_CN]=Substream 悬浮字幕
+Comment=Desktop captions for local speech recognition
+Exec=substream-overlay --preview
+Icon=preferences-desktop-font
+NoDisplay=true
+Terminal=false

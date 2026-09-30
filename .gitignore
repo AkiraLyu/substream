@@ -1,7 +1,7 @@
 /target/
+/build/
 /models/
 /output/
 /browser/extension/node_modules/
 /browser/extension/dist/
 *.token
-

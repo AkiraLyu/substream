@@ -2,7 +2,7 @@
 
 Substream 是面向 Linux 的本地语音识别与字幕工具，支持系统音频和浏览器标签页的实时字幕，以及本地媒体文件的完整字幕导出。
 
-实时识别使用 sherpa-onnx，文件识别使用 whisper.cpp。目前提供命令行、本地 WebSocket 服务和 Chromium 扩展，字幕可在扩展弹窗中预览。桌面悬浮字幕、网页视频下载、翻译和总结尚未实现。
+实时识别使用 sherpa-onnx，文件识别使用 whisper.cpp。提供命令行、本地 WebSocket 服务、Chromium 扩展和 KDE Wayland 悬浮字幕。GNOME 显示端、网页视频下载、翻译和总结尚未实现。
 
 技术选择和模块职责见 [架构设计](docs/architecture.md)，客户端接入方式见 [本地协议](docs/protocol.md)。
 
@@ -73,6 +73,26 @@ cargo run -p substream --release --features sherpa -- serve \
 
 令牌文件仅允许当前用户读写，扩展在浏览器会话期间保存令牌。模型加载完成后才开始采集。扩展只能捕获启动后实际播放的音频；生成整段字幕需要使用完整媒体文件。
 
+## 桌面悬浮字幕
+
+KDE 显示端使用 Qt 6 和 LayerShellQt，在屏幕底部显示字幕，支持鼠标穿透、自动换行和超时隐藏，不抢占键盘焦点。它可以读取 `stream` 的逐行 JSON，也可以订阅浏览器识别会话的字幕。
+
+安装 Qt 6、Qt Quick、Qt WebSockets、LayerShellQt 和 CMake 后，在仓库根目录构建：
+
+```bash
+cmake -S apps/overlay -B build/overlay -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build/overlay --parallel 2
+build/overlay/substream-overlay --preview
+```
+
+浏览器使用本地识别服务时，另开终端运行：
+
+```bash
+build/overlay/substream-overlay --token-file /tmp/substream.token
+```
+
+屏幕选择、系统音频接入和 GNOME 显示接口见 [桌面字幕](docs/desktop.md)。
+
 ## 文件字幕
 
 安装 FFmpeg 和 [whisper.cpp 的 whisper-cli](https://github.com/ggml-org/whisper.cpp/tree/master/examples/cli)，并准备语音模型：
@@ -122,6 +142,7 @@ cargo test -p substream --test offline -- --ignored
 | `crates/protocol` | JSON 消息和二进制音频格式 |
 | `crates/backends` | 识别引擎、FFmpeg 和子进程管理 |
 | `apps/substream` | 命令行、配置、认证和本地服务 |
+| `apps/overlay` | 字幕显示状态、事件接收和 KDE 悬浮窗口 |
 | `browser/extension` | 标签页音频捕获与字幕预览 |
 | `fixtures` | 协议和识别结果的共用样本 |
 

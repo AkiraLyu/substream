@@ -29,6 +29,7 @@ use tokio::{
 use crate::{
     auth::Token,
     config::RecognizerConfig,
+    display::DisplayHub,
     worker::{self, QueuedAudio},
 };
 
@@ -39,6 +40,8 @@ struct AppState {
     recognizer: RecognizerConfig,
     connections: Arc<Semaphore>,
     inference: Arc<Semaphore>,
+    display_connections: Arc<Semaphore>,
+    display: DisplayHub,
     shutdown: watch::Receiver<bool>,
 }
 
@@ -77,11 +80,14 @@ pub fn router(config: ServerConfig, shutdown: watch::Receiver<bool>) -> Router {
         recognizer: config.recognizer,
         connections: Arc::new(Semaphore::new(4)),
         inference: Arc::new(Semaphore::new(1)),
+        display_connections: Arc::new(Semaphore::new(8)),
+        display: DisplayHub::default(),
         shutdown,
     };
     Router::new()
         .route("/health", get(|| async { "substream/1\n" }))
         .route("/v1/stream", get(upgrade))
+        .route("/v1/display", get(upgrade_display))
         .with_state(state)
 }
 
@@ -89,6 +95,23 @@ async fn upgrade(
     State(state): State<AppState>,
     headers: HeaderMap,
     ws: WebSocketUpgrade,
+) -> Response {
+    upgrade_socket(state, headers, ws, false)
+}
+
+async fn upgrade_display(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    ws: WebSocketUpgrade,
+) -> Response {
+    upgrade_socket(state, headers, ws, true)
+}
+
+fn upgrade_socket(
+    state: AppState,
+    headers: HeaderMap,
+    ws: WebSocketUpgrade,
+    display: bool,
 ) -> Response {
     if let Some(origin) = headers.get("origin") {
         let allowed = origin
@@ -99,18 +122,27 @@ async fn upgrade(
             return StatusCode::FORBIDDEN.into_response();
         }
     }
-    let Ok(permit) = Arc::clone(&state.connections).try_acquire_owned() else {
+    let connections = if display {
+        &state.display_connections
+    } else {
+        &state.connections
+    };
+    let Ok(permit) = Arc::clone(connections).try_acquire_owned() else {
         return StatusCode::TOO_MANY_REQUESTS.into_response();
     };
     ws.max_message_size(MAX_FRAME_BYTES)
         .max_frame_size(MAX_FRAME_BYTES)
         .on_upgrade(move |socket| async move {
             let _permit = permit;
-            session(socket, state).await;
+            if display {
+                display_session(socket, state).await;
+            } else {
+                session(socket, state).await;
+            }
         })
 }
 
-async fn send(socket: &mut WebSocket, message: &ServerMessage) -> Result<()> {
+async fn send(socket: &mut WebSocket, message: &impl serde::Serialize) -> Result<()> {
     let text = serde_json::to_string(message)?;
     timeout(
         Duration::from_secs(3),
@@ -132,21 +164,60 @@ async fn fail(socket: &mut WebSocket, code: &str, message: &str) {
     let _ = timeout(Duration::from_secs(1), socket.close()).await;
 }
 
-async fn session(mut socket: WebSocket, mut state: AppState) {
+async fn authenticate(socket: &mut WebSocket, token: &Token) -> bool {
     let authenticated = match timeout(Duration::from_secs(5), socket.recv()).await {
         Ok(Some(Ok(Message::Text(text)))) => matches!(
             serde_json::from_str::<ClientMessage>(&text),
-            Ok(ClientMessage::Authenticate { version: VERSION, token }) if state.token.matches(&token)
+            Ok(ClientMessage::Authenticate { version: VERSION, token: supplied }) if token.matches(&supplied)
         ),
         _ => false,
     };
     if !authenticated {
         fail(
-            &mut socket,
+            socket,
             "unauthorized",
             "valid v1 authentication is required as the first message",
         )
         .await;
+    }
+    authenticated
+}
+
+async fn display_session(mut socket: WebSocket, mut state: AppState) {
+    if !authenticate(&mut socket, &state.token).await {
+        return;
+    }
+    let mut updates = state.display.subscribe();
+    loop {
+        let snapshot = updates.borrow_and_update().snapshot();
+        if send(&mut socket, &snapshot).await.is_err() {
+            break;
+        }
+        loop {
+            tokio::select! {
+                _ = state.shutdown.changed() => {
+                    let _ = timeout(Duration::from_secs(1), socket.close()).await;
+                    return;
+                }
+                changed = updates.changed() => {
+                    if changed.is_err() { return; }
+                    break;
+                }
+                incoming = socket.recv() => match incoming {
+                    Some(Ok(Message::Ping(_) | Message::Pong(_))) => {}
+                    Some(Ok(Message::Text(_) | Message::Binary(_))) => {
+                        fail(&mut socket, "read_only", "display connections only receive caption state").await;
+                        return;
+                    }
+                    _ => return,
+                }
+            }
+        }
+    }
+}
+
+async fn session(mut socket: WebSocket, mut state: AppState) {
+    if !authenticate(&mut socket, &state.token).await {
         return;
     }
     let Ok(inference) = Arc::clone(&state.inference).try_acquire_owned() else {
@@ -154,6 +225,7 @@ async fn session(mut socket: WebSocket, mut state: AppState) {
         return;
     };
     let (input_tx, input_rx) = mpsc::channel(worker::AUDIO_QUEUE_CAPACITY);
+    let display = state.display.start();
     let (output_tx, mut output_rx) = mpsc::channel(worker::EVENT_QUEUE_CAPACITY);
     let finish = Arc::new(AtomicBool::new(false));
     let worker_finish = Arc::clone(&finish);
@@ -183,6 +255,7 @@ async fn session(mut socket: WebSocket, mut state: AppState) {
                 };
                 let complete = matches!(event, ServerMessage::Finished { .. } | ServerMessage::Error { .. });
                 if matches!(event, ServerMessage::Ready { .. }) { ready = true; }
+                display.publish(&event);
                 if send(&mut socket, &event).await.is_err() || complete { break; }
             }
             incoming = socket.recv(), if input.is_some() => {

@@ -94,3 +94,37 @@ Rust 和 TypeScript 共用 [二进制样本](../fixtures/audio-v1.bin) 检查兼
 | `timeout` | 初始化、等待输入或结束处理超时 |
 
 服务限制音频缓冲量，处理不及时会结束会话。目前无输入的等待时间上限为 30 秒，也用于限制初始化和结束处理；单次网络发送最多等待 3 秒。客户端应按实时速度发送音频，并持续接收字幕。识别失败时不会自动切换到示例模式。
+
+## 桌面字幕订阅
+
+`GET /v1/display` 建立只读 WebSocket 连接，供 KDE 显示端、GNOME Shell 扩展等客户端使用。它采用相同的来源检查和首条 `authenticate` 消息，但不启动模型，也不占用音频连接的名额。
+
+认证成功后立即返回当前显示状态，之后在状态变化时继续发送：
+
+```json
+{
+  "type": "display",
+  "version": 1,
+  "session_id": 1,
+  "status": "listening",
+  "backend": {"name": "sherpa-onnx", "synthetic": false, "languages": ["zh"]},
+  "caption": {
+    "segment_id": 0, "revision": 2,
+    "start_ms": 0, "end_ms": 400,
+    "stable_text": "你好", "unstable_text": "世界", "is_final": false
+  },
+  "caption_age_ms": 120,
+  "message": null
+}
+```
+
+- `session_id` 区分当前服务进程内的识别会话。开始新会话时递增；服务重启后从头计数，客户端重连时应丢弃本地旧状态。
+- `status` 为 `idle`、`loading`、`listening`、`finished` 或 `error`，分别表示空闲、加载模型、识别中、正常结束和识别错误。
+- `backend` 与音频接口含义相同，模型就绪前可为 `null`。显示端应明确标记 `synthetic: true` 的示例字幕。
+- `caption` 是最新一段字幕，没有字幕时为 `null`。正常结束后保留末尾字幕；取消或开始新会话时清空。
+- `caption_age_ms` 是字幕更新到本次发送之间的毫秒数，没有字幕时为 `null`。显示端用它计算剩余显示时间，避免重连后重新显示已过期的字幕。
+- `message` 在识别错误时给出原因，其他状态为 `null`。
+
+每条消息都是完整状态，中间更新可能合并，不能用此接口保存完整字幕历史。显示端应替换旧状态，空闲或断开时清空画面。字幕隐藏时间由显示端决定。
+
+订阅连接可以保持空闲。发送音频或控制消息会收到 `read_only` 错误并断开；关闭订阅不会停止识别。接口仅包含通用 JSON 数据，不依赖 KDE、Qt 或 GNOME 类型。

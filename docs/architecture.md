@@ -12,6 +12,7 @@ Substream 分别处理实时字幕和文件字幕。实时识别需要持续接�
 | whisper.cpp CLI | 用于完整文件识别，提供段落文本和时间。进程接口便于独立安装和替换引擎，每次任务都需要重新加载模型。 |
 | FFmpeg | 统一解码常见媒体格式，将音轨转换为识别所需的采样率和声道数。 |
 | TypeScript 与 Chromium 扩展 API | 通过 `tabCapture` 获取用户选择的标签页音频，用后台文档维持捕获，以 `AudioWorklet` 处理音频；类型检查帮助约束各部分的消息格式。 |
+| Qt Quick 与 LayerShellQt | Qt Quick 负责文本排版和屏幕缩放，LayerShellQt 将窗口放入 KDE Wayland 的悬浮层。C++ 显示端独立运行，通过 JSON 接收字幕，不加载识别模型。 |
 
 接口用法可查阅 [sherpa-onnx Rust 文档](https://k2-fsa.github.io/sherpa/onnx/rust-api/index.html)、[whisper.cpp CLI](https://github.com/ggml-org/whisper.cpp/tree/master/examples/cli) 和 [Chrome 音频捕获说明](https://developer.chrome.com/docs/extensions/how-to/web-platform/screen-capture)。
 
@@ -26,6 +27,8 @@ flowchart LR
     N --> S
     S --> C[字幕更新与时间检查]
     C --> U[JSON 事件 / 弹窗预览]
+    C --> V[字幕显示接口]
+    V --> K[KDE 悬浮字幕]
     F[本地媒体文件] --> D[FFmpeg 转换音频]
     D --> O[文件识别]
     O --> T[字幕文本与时间]
@@ -52,13 +55,14 @@ flowchart LR
 
 标签页捕获的时间从开始采集时算起。视频暂停、跳转或变速后，它不再对应视频时间，因此整段视频字幕应从完整媒体文件生成。扩展目前只保存最新状态和字幕预览。
 
-桌面悬浮字幕尚未实现，显示层需要按桌面环境接入。`gtk4-layer-shell` 支持 KDE 和部分使用 wlroots 的桌面；GNOME Wayland 需要评估 Shell 扩展或独立字幕窗口。接入时应在目标桌面检查全屏、多屏、缩放和鼠标穿透。[桌面兼容说明](https://github.com/wmww/gtk4-layer-shell#supported-desktops)
+KDE 显示端通过 LayerShellQt 创建悬浮窗口，设置鼠标穿透、无键盘焦点和不占用桌面布局。窗口按所选屏幕的逻辑尺寸排版，Qt 处理缩放。[LayerShellQt](https://github.com/KDE/layer-shell-qt)、[Qt 窗口属性](https://doc.qt.io/qt-6/qt.html#WindowType-enum)。
 
-## 后续扩展
+显示程序有两种输入：`stream` 命令的逐行 JSON，以及本地服务的 `/v1/display` 订阅。订阅使用相同的令牌认证，只返回最新字幕状态，不接收音频，也不占用识别会话。服务合并尚未发送的更新，显示程序关闭或读取缓慢不会阻塞推理。
 
-- 先选定目标语言的模型和代表性音频，测量准确率、字幕延迟与资源占用，再决定是否增加 GPU 或更换引擎。
-- 系统音频可增加直接调用 PipeWire 的采集模块，处理设备切换和断流。字幕界面订阅字幕事件，不参与音频采集或推理。
-- 网页整段字幕需要独立的媒体获取模块，将可访问的媒体保存为文件，再交给文件识别接口。网站规则与字幕核心分开维护。
-- 翻译和总结读取已定稿的 `Transcript`，保留原文及来源时间。需要任务恢复和历史查询时，再增加持久化存储。
+`CaptionModel` 处理段落替换和显示时长，`EventSource` 接收消息，`KdeWindow` 负责 KDE 窗口设置，QML 负责排版。桌面无关的消息类型定义在 `substream-protocol::display` 中。GNOME Shell 扩展可以直接订阅该接口，不需要使用 Qt 或修改识别核心；当前尚未提供 GNOME 显示端。
 
-新增模块应对应实际功能或独立依赖，不为尚未实现的能力预先建立空接口。
+## 其他扩展接口
+
+`StreamingRecognizer` 接收连续音频，`BatchRecognizer` 接收完整音频文件，两者返回统一的字幕数据。系统音频目前通过标准输入接入，媒体输入目前只接受本地文件。音频采集和网站媒体获取应分别放在输入模块中。
+
+已定稿的 `Transcript` 包含文本和来源时间，可供翻译、总结或历史记录使用。这些功能不需要接触音频采集回调。

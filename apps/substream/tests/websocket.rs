@@ -7,7 +7,11 @@ use substream::{
     server::{ServerConfig, router},
 };
 use substream_core::audio::AudioChunk;
-use substream_protocol::{ServerMessage, encode_audio};
+use substream_protocol::{
+    ServerMessage,
+    display::{DisplayState, DisplayStatus},
+    encode_audio,
+};
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::watch,
@@ -58,7 +62,16 @@ impl TestServer {
     }
 
     async fn connect(&self, token: &str) -> Socket {
-        let (mut socket, _) = connect_async(&self.url).await.unwrap();
+        self.connect_url(&self.url, token).await
+    }
+
+    async fn display(&self, token: &str) -> Socket {
+        self.connect_url(&self.url.replace("/v1/stream", "/v1/display"), token)
+            .await
+    }
+
+    async fn connect_url(&self, url: &str, token: &str) -> Socket {
+        let (mut socket, _) = connect_async(url).await.unwrap();
         socket
             .send(Message::Text(
                 serde_json::json!({"type":"authenticate", "version":1, "token":token})
@@ -78,13 +91,17 @@ impl Drop for TestServer {
     }
 }
 
-async fn event(socket: &mut Socket) -> ServerMessage {
+async fn json_event<T: serde::de::DeserializeOwned>(socket: &mut Socket) -> T {
     let message = timeout(Duration::from_secs(3), socket.next())
         .await
         .unwrap()
         .unwrap()
         .unwrap();
     serde_json::from_str(message.to_text().unwrap()).unwrap()
+}
+
+async fn event(socket: &mut Socket) -> ServerMessage {
+    json_event(socket).await
 }
 
 #[tokio::test]
@@ -184,4 +201,94 @@ async fn stopping_the_server_closes_active_connections() {
         .await
         .unwrap();
     assert!(matches!(message, Some(Ok(Message::Close(_))) | None));
+}
+
+#[tokio::test]
+async fn display_reconnects_to_latest_subtitles_without_interrupting_recognition() {
+    let server = TestServer::start().await;
+    let mut viewer = server.display(&server.token).await;
+    let idle: DisplayState = json_event(&mut viewer).await;
+    assert_eq!(idle.status, DisplayStatus::Idle);
+    let mut audio = server.connect(&server.token).await;
+    assert!(matches!(
+        event(&mut audio).await,
+        ServerMessage::Ready { .. }
+    ));
+    viewer.close(None).await.unwrap();
+
+    let chunk = AudioChunk::new(0, 0, vec![0.0; 1000]).unwrap();
+    audio
+        .send(Message::Binary(encode_audio(&chunk).into()))
+        .await
+        .unwrap();
+    audio
+        .send(Message::Text(r#"{"type":"finish"}"#.into()))
+        .await
+        .unwrap();
+    let mut final_caption = None;
+    loop {
+        match event(&mut audio).await {
+            ServerMessage::Caption { caption } if caption.is_final => final_caption = Some(caption),
+            ServerMessage::Caption { .. } => {}
+            ServerMessage::Finished {
+                samples_processed, ..
+            } => {
+                assert_eq!(samples_processed, 1000);
+                break;
+            }
+            other => panic!("recognition interrupted by display: {other:?}"),
+        }
+    }
+    let mut viewer = server.display(&server.token).await;
+    let latest: DisplayState = json_event(&mut viewer).await;
+    assert_eq!(latest.status, DisplayStatus::Finished);
+    assert_eq!(
+        latest.caption.as_ref().unwrap(),
+        final_caption.as_ref().unwrap()
+    );
+    assert!(latest.backend.unwrap().synthetic);
+    assert!(latest.caption_age_ms.is_some());
+
+    let mut next_audio = server.connect(&server.token).await;
+    assert!(matches!(
+        event(&mut next_audio).await,
+        ServerMessage::Ready { .. }
+    ));
+    loop {
+        let current: DisplayState = json_event(&mut viewer).await;
+        if current.status == DisplayStatus::Listening {
+            assert_ne!(current.session_id, latest.session_id);
+            assert!(
+                current.caption.is_none(),
+                "new sessions must not show previous speech"
+            );
+            break;
+        }
+    }
+    next_audio.close(None).await.unwrap();
+    loop {
+        let current: DisplayState = json_event(&mut viewer).await;
+        if current.status == DisplayStatus::Idle {
+            assert!(current.caption.is_none());
+            break;
+        }
+    }
+}
+
+#[tokio::test]
+async fn display_requires_authentication_and_rejects_audio_controls() {
+    let server = TestServer::start().await;
+    let mut invalid = server.display("wrong").await;
+    assert!(
+        matches!(event(&mut invalid).await, ServerMessage::Error { code, .. } if code == "unauthorized")
+    );
+    let mut viewer = server.display(&server.token).await;
+    let _: DisplayState = json_event(&mut viewer).await;
+    viewer
+        .send(Message::Text(r#"{"type":"finish"}"#.into()))
+        .await
+        .unwrap();
+    assert!(
+        matches!(event(&mut viewer).await, ServerMessage::Error { code, .. } if code == "read_only")
+    );
 }

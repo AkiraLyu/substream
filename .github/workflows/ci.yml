@@ -39,3 +39,14 @@ jobs:
       - run: npm run check
       - run: npm run build
       - run: npm test
+  overlay:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - run: pacman -Syu --noconfirm --needed git cmake ninja clang qt6-declarative qt6-websockets layer-shell-qt
+      - uses: actions/checkout@v4
+      - run: clang-format --dry-run --Werror apps/overlay/src/*.cpp apps/overlay/src/*.h apps/overlay/tests/*.cpp
+      - run: /usr/lib/qt6/bin/qmllint apps/overlay/qml/Overlay.qml
+      - run: cmake -S apps/overlay -B build/overlay -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build build/overlay --parallel 2
+      - run: ctest --test-dir build/overlay --output-on-failure

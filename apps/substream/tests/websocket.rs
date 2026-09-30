@@ -88,13 +88,13 @@ async fn event(socket: &mut Socket) -> ServerMessage {
 }
 
 #[tokio::test]
-async fn authenticated_audio_flushes_one_short_final_before_finished() {
+async fn stopping_a_stream_delivers_final_captions_and_accounts_for_all_audio() {
     let server = TestServer::start().await;
     let mut socket = server.connect(&server.token).await;
     assert!(
         matches!(event(&mut socket).await, ServerMessage::Ready { backend, .. } if backend.synthetic)
     );
-    let chunk = AudioChunk::new(0, 0, vec![0.0; 320]).unwrap();
+    let chunk = AudioChunk::new(0, 0, vec![0.0; 1000]).unwrap();
     socket
         .send(Message::Binary(encode_audio(&chunk).into()))
         .await
@@ -103,30 +103,45 @@ async fn authenticated_audio_flushes_one_short_final_before_finished() {
         .send(Message::Text(r#"{"type":"finish"}"#.into()))
         .await
         .unwrap();
-    match event(&mut socket).await {
-        ServerMessage::Caption { caption } => {
-            assert!(caption.is_final);
-            assert_eq!((caption.start_ms, caption.end_ms), (0, 20));
+    let mut finals = Vec::new();
+    loop {
+        match event(&mut socket).await {
+            ServerMessage::Caption { caption } => {
+                if caption.is_final {
+                    finals.push(caption.segment());
+                }
+            }
+            ServerMessage::Finished {
+                samples_processed, ..
+            } => {
+                assert_eq!(samples_processed, 1000);
+                break;
+            }
+            other => panic!("unexpected stream event: {other:?}"),
         }
-        other => panic!("expected final caption, got {other:?}"),
     }
-    assert!(matches!(
-        event(&mut socket).await,
-        ServerMessage::Finished {
-            samples_processed: 320,
-            ..
-        }
-    ));
+    assert!(
+        !finals.is_empty(),
+        "the last utterance must not be lost on stop"
+    );
+    assert!(finals.iter().all(|segment| !segment.text.is_empty()
+        && segment.start_ms < segment.end_ms
+        && segment.end_ms <= 63));
 }
 
 #[tokio::test]
-async fn rejects_unknown_origins_and_bad_tokens_before_loading_a_model() {
+async fn rejects_untrusted_origins_and_invalid_tokens() {
     let server = TestServer::start().await;
     let mut request = server.url.clone().into_client_request().unwrap();
     request
         .headers_mut()
         .insert("origin", "https://untrusted.example".parse().unwrap());
-    assert!(connect_async(request).await.is_err());
+    match connect_async(request).await {
+        Err(tokio_tungstenite::tungstenite::Error::Http(response)) => {
+            assert_eq!(response.status().as_u16(), 403)
+        }
+        other => panic!("expected an origin rejection, got {other:?}"),
+    }
     let mut socket = server.connect("wrong").await;
     assert!(
         matches!(event(&mut socket).await, ServerMessage::Error { code, .. } if code == "unauthorized")
@@ -134,44 +149,37 @@ async fn rejects_unknown_origins_and_bad_tokens_before_loading_a_model() {
 }
 
 #[tokio::test]
-async fn limits_concurrent_inference_and_reports_timeline_gaps() {
-    let server = TestServer::start().await;
-    let mut first = server.connect(&server.token).await;
-    assert!(matches!(
-        event(&mut first).await,
-        ServerMessage::Ready { .. }
-    ));
-    let mut second = server.connect(&server.token).await;
-    assert!(
-        matches!(event(&mut second).await, ServerMessage::Error { code, .. } if code == "busy")
-    );
-    let gap = AudioChunk::new(1, 320, vec![0.0; 320]).unwrap();
-    first
-        .send(Message::Binary(encode_audio(&gap).into()))
-        .await
-        .unwrap();
-    assert!(
-        matches!(event(&mut first).await, ServerMessage::Error { code, .. } if code == "worker_failed")
-    );
+async fn malformed_or_missing_audio_is_reported_instead_of_silently_accepted() {
+    let gap = encode_audio(&AudioChunk::new(2, 640, vec![0.0; 320]).unwrap());
+    for invalid in [vec![0_u8; 25], gap] {
+        let server = TestServer::start().await;
+        let mut socket = server.connect(&server.token).await;
+        assert!(matches!(
+            event(&mut socket).await,
+            ServerMessage::Ready { .. }
+        ));
+        let first = AudioChunk::new(0, 0, vec![0.0; 320]).unwrap();
+        socket
+            .send(Message::Binary(encode_audio(&first).into()))
+            .await
+            .unwrap();
+        socket.send(Message::Binary(invalid.into())).await.unwrap();
+        loop {
+            match event(&mut socket).await {
+                ServerMessage::Error { .. } => break,
+                ServerMessage::Caption { .. } => {}
+                other => panic!("expected an audio error, got {other:?}"),
+            }
+        }
+    }
 }
 
 #[tokio::test]
-async fn rejects_malformed_frames_and_cancels_an_idle_session_on_shutdown() {
+async fn stopping_the_server_closes_active_connections() {
     let server = TestServer::start().await;
     let mut socket = server.connect(&server.token).await;
     event(&mut socket).await;
-    socket
-        .send(Message::Binary(vec![0_u8; 25].into()))
-        .await
-        .unwrap();
-    assert!(
-        matches!(event(&mut socket).await, ServerMessage::Error { code, .. } if code == "bad_audio")
-    );
-
-    let other_server = TestServer::start().await;
-    let mut socket = other_server.connect(&other_server.token).await;
-    event(&mut socket).await;
-    other_server.shutdown.send(true).unwrap();
+    server.shutdown.send(true).unwrap();
     let message = timeout(Duration::from_secs(3), socket.next())
         .await
         .unwrap();

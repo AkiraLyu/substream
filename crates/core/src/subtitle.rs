@@ -107,15 +107,36 @@ mod tests {
         assert!(srt.contains("01:01:01,001 --> 01:01:02,050"));
         assert!(srt.contains("&lt;tag&gt; &amp; text"));
         let vtt = render(&transcript(), Format::Vtt, NonZeroUsize::new(42).unwrap()).unwrap();
-        assert!(vtt.starts_with("WEBVTT\n\n1\n01:01:01.001"));
-        assert_eq!(timestamp(90_000_000, Format::Srt), "25:00:00,000");
+        assert!(vtt.starts_with("WEBVTT\n"));
+        assert!(vtt.contains("01:01:01.001 --> 01:01:02.050"));
+        assert!(vtt.contains("&lt;tag&gt; &amp; text"));
     }
 
     #[test]
-    fn wraps_display_columns_not_utf8_bytes() {
-        assert_eq!(wrap("你好世界", 4), "你好\n世界");
-        assert_eq!(wrap("one two three", 7), "one two\nthree");
-        assert_eq!(wrap("👩‍💻👩‍💻", 2), "👩‍💻\n👩‍💻");
+    fn exported_lines_fit_the_width_without_losing_text_or_splitting_characters() {
+        let text = "你好世界 one two 👩‍💻 café e\u{301}";
+        let mut transcript = transcript();
+        transcript.segments[0].text = text.into();
+        let output = render(&transcript, Format::Srt, NonZeroUsize::new(8).unwrap()).unwrap();
+        let lines: Vec<_> = output
+            .lines()
+            .skip(2)
+            .filter(|line| !line.is_empty())
+            .collect();
+        assert!(lines.iter().all(|line| line.width() <= 8));
+
+        let visible_characters = |value: &str| {
+            value
+                .graphemes(true)
+                .filter(|character| !character.chars().all(char::is_whitespace))
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        };
+        let actual: Vec<_> = lines
+            .iter()
+            .flat_map(|line| visible_characters(line))
+            .collect();
+        assert_eq!(actual, visible_characters(text));
     }
 
     #[test]

@@ -67,10 +67,14 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("token");
         create_token(&path).unwrap();
+        let original = std::fs::read_to_string(&path).unwrap();
         assert!(create_token(&path).is_err());
-        let token = Token::read(&path).unwrap();
-        assert!(token.matches(std::fs::read_to_string(&path).unwrap().trim()));
-        assert!(!token.matches(&"0".repeat(64)));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().permissions().mode() & 0o077,
+            0
+        );
+        assert!(Token::read(&path).is_ok());
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
         assert!(Token::read(&path).is_err());
     }

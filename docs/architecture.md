@@ -1,73 +1,64 @@
-# 需求与架构决策
+# 架构设计
 
-基于引用对话中的用户需求：低延迟、多语言、系统悬浮字幕；浏览器视频的完整字幕；只处理无保护限制的内容；AI 总结后续扩展。本文区分需求、采用的设计和本次实现边界，不把此前对话中的性能数字当作已验证结论。
+Substream 分别处理实时字幕和文件字幕。实时识别需要持续接收音频并及时更新文本；文件识别可以读取完整音频，更重视识别准确率和字幕时间。两者使用不同的识别接口，共用字幕数据和导出功能。
 
-## 两种任务的优化目标
+## 技术选择
 
-| 维度 | 实时字幕 | 完整视频字幕 |
-| --- | --- | --- |
-| 输入 | 正在发生的系统/标签页音频 | 可读取的完整媒体资源 |
-| 核心指标 | 首个 partial、稳定字幕、P95/P99 延迟 | 识别质量、时间轴质量、RTF、总耗时 |
-| 时间基准 | 会话内采样位置 | 原始媒体时间轴 |
-| 排队策略 | 容量与音频年龄均有限制，超载显式失败 | 背压、持久化任务、取消/恢复 |
-| 识别方式 | 增量 streaming recognizer | 完整上下文或分段 batch recognizer |
+| 技术 | 选择原因 |
+| --- | --- |
+| Rust | 用统一的数据类型组织音频、字幕和会话状态，便于接入本地识别库，并明确管理模型、连接和子进程的生命周期。 |
+| Tokio 与 Axum | 处理 WebSocket 连接、超时和取消。同步推理在独立工作线程中运行，避免阻塞网络通信。 |
+| sherpa-onnx | 提供连续音频的增量识别接口和 Rust 接口。当前使用 CPU 上的流式 Transducer 模型，支持的语言由模型决定。 |
+| whisper.cpp CLI | 用于完整文件识别，提供段落文本和时间。进程接口便于独立安装和替换引擎，每次任务都需要重新加载模型。 |
+| FFmpeg | 统一解码常见媒体格式，将音轨转换为识别所需的采样率和声道数。 |
+| TypeScript 与 Chromium 扩展 API | 通过 `tabCapture` 获取用户选择的标签页音频，用后台文档维持捕获，以 `AudioWorklet` 处理音频；类型检查帮助约束各部分的消息格式。 |
 
-“绝对高性能”不能直接成为验收条件。必须绑定硬件、语言、模型、精度和工作负载；例如减小模型能降低延迟，但可能明显损害日语/噪声场景的识别效果。
+接口用法可查阅 [sherpa-onnx Rust 文档](https://k2-fsa.github.io/sherpa/onnx/rust-api/index.html)、[whisper.cpp CLI](https://github.com/ggml-org/whisper.cpp/tree/master/examples/cli) 和 [Chrome 音频捕获说明](https://developer.chrome.com/docs/extensions/how-to/web-platform/screen-capture)。
 
-## 对参考方案的取舍
-
-1. **采用 Rust 组织管线，不把语言选择视为性能证明。** 领域层不依赖 SDK；FFI 留在适配器。Python/CTranslate2 也可成为未来离线进程后端，但先用同等模型、精度和硬件测量后再选择，避免先引入多套大运行时。
-2. **保留 streaming / batch 两种接口。** Whisper 的流式示例属于窗口重复推理，不能因其名称包含 streaming 就保证低延迟。本阶段实时使用 sherpa streaming transducer，离线使用 whisper.cpp CLI；不在每个实时块上重启 CLI。[Whisper 官方流式示例](https://github.com/ggml-org/whisper.cpp/tree/master/examples/stream)
-3. **不假定一个 sherpa 模型覆盖全部语言。** 语言清单属于模型配置。现阶段支持选择模型，没有自动语言切换、模型热加载或翻译。日→中需求应拆成日语识别与中文翻译，原文和译文都保留。[sherpa 官方 Rust 接口](https://k2-fsa.github.io/sherpa/onnx/rust-api/index.html)
-4. **修正 GNOME 悬浮层方案。** `gtk4-layer-shell` 明确不支持 GNOME Wayland；KDE/wlroots 等可作为它的目标。GNOME 应单独验证 Shell 扩展或普通字幕窗口。全屏、输入穿透、多屏与缩放均是桌面能力，不能由通用 GTK 窗口保证。本阶段不发布未经验证的全局 overlay。[上游桌面兼容说明](https://github.com/wmww/gtk4-layer-shell#supported-desktops)
-5. **浏览器捕获与媒体下载分开。** `tabCapture` 可以捕获正在播放的标签页，在 MV3 中由 offscreen document 持有流；需要用户主动触发。它不能提前拿到尚未播放的内容，也不能恢复已经播放的内容。`captureStream()`、页面 URL 和 `blob:` 不能成为通用整段下载接口。[Chrome 官方流程](https://developer.chrome.com/docs/extensions/how-to/web-platform/screen-capture) 捕获 ID 数秒后过期，因此先等待 daemon/model ready，再申请 ID 并立即消费。[tabCapture API](https://developer.chrome.com/docs/extensions/reference/api/tabCapture)
-6. **GPU 优先级不等于可抢占正在执行的推理。** 本阶段单路实时准入、固定 CPU 线程数、实时/离线独立入口。没有“batch 随时让出 GPU”的保证。后续需要小批次调度、实时任务的显存预留或设备隔离；跨进程 CPU/内存/GPU 争用仍须测量。
-7. **稳定文本是显示提示。** 连续两次相同的 grapheme 前缀显示为稳定；新的识别结果可以修正它，final 具有最终权威。同一段 revision 递增，final 后不可修改。这避免把一次错误识别永久冻结，也不会切断 CJK、组合字符或 emoji。
-8. **不以 VAD 静音裁剪破坏时钟。** 初版使用 streaming recognizer 的 endpointing，不额外删除静音。模型需要的结束 padding 不推进对外时间。以后 VAD 必须保留 pre-roll、hangover 和媒体偏移映射；静音本身也是端点判断的证据。
-9. **字幕排版不伪造对齐。** Whisper 段落时间先保留；只有真实词级/字符级对齐可用于进一步控制两行、CPS 和语义边界。模型 BPE token 不是自然语言的词。当前导出只校验时间与换行。[whisper.cpp JSON 输出实现](https://github.com/ggml-org/whisper.cpp/blob/master/examples/cli/cli.cpp)
-10. **暂不引入 SQLite、模型仓库和多进程调度系统。** 首版边界是可测试的管线与协议。离线任务恢复、多任务历史出现后再增加存储；AI 消费定稿 Transcript，即可避免与音频采集耦合。
-
-## 本阶段数据流
+## 数据流与模块职责
 
 ```mermaid
 flowchart LR
-    P[PipeWire pw-cat / FFmpeg stdout] --> R[PCM reader]
-    B[Chromium tabCapture] --> W[AudioWorklet / PCM16]
-    W --> I[Authenticated WebSocket]
-    I --> Q[Bounded queue]
-    Q --> S[Dedicated streaming worker]
-    R --> S
-    S --> A[StreamingRecognizer]
-    A --> C[Timeline validation + stabilizer]
-    C --> E[Caption events / NDJSON]
-    E --> U[Browser caption preview]
-    F[Local media file] --> D[FFmpeg normalized temporary WAV]
-    D --> O[BatchRecognizer / whisper-cli]
-    O --> T[Validated Transcript]
-    T --> X[SRT / VTT / JSON]
+    P[系统音频 / pw-cat] --> R[标准输入]
+    B[浏览器标签页] --> W[AudioWorklet]
+    W --> N[本地 WebSocket 服务]
+    R --> S[实时识别]
+    N --> S
+    S --> C[字幕更新与时间检查]
+    C --> U[JSON 事件 / 弹窗预览]
+    F[本地媒体文件] --> D[FFmpeg 转换音频]
+    D --> O[文件识别]
+    O --> T[字幕文本与时间]
+    T --> X[SRT / WebVTT / JSON]
 ```
 
-领域层只使用 owned PCM 和普通 Rust 数据类型。当前音频转换有受控分配与拷贝，没有宣称 zero-copy。`StreamingRecognizer` 不要求 `Send`：FFI 对象在专属 worker 创建和销毁。默认构建没有 native ASR 依赖；`sherpa` feature 增加上游 CPU 库。
+`core` 定义音频、字幕和识别接口，负责时间检查、文本更新及导出。它不依赖网络、设备或具体识别引擎。`backends` 接入识别库和外部程序；`protocol` 定义客户端消息；应用层负责配置、认证和任务调度。
 
-浏览器的 MessagePort 最多允许四个未归还的音频块；WebSocket 发送缓存最多八个标准帧；daemon 最多八个待处理块，入队后年龄不得超过 250 ms。任何一层超载都报告错误并终止当前时间轴。选择显式失败，是为了在第一阶段保证数据缺失可见；后续恢复协议可以丢弃旧块并带 discontinuity 标记重建上下文。
+实时识别器在工作线程中创建、调用和销毁。网络服务通过队列交换音频与字幕。队列限制容量和等待时间，处理不及时便报告错误并结束连接，避免字幕持续落后于声音。目前一个服务只运行一个实时识别会话，以限制模型的内存占用。
 
-daemon 只允许一个活动识别器、最多四个连接，避免模型内存因任意连接数量扩张。推理同步运行于 blocking worker，不能放到 Tokio reactor。正常停止关闭输入并排空队列，flush 后发送 final 与 finished；连接丢失取消工作。已经进入 native decode 的计算无法被 Rust future 强制中止。
+正常停止时，服务处理完已接收的音频，再输出末尾字幕和完成消息。意外断开会取消任务。已进入本地识别库的计算仍需等待调用返回，不能立即强制中断。
 
-## 媒体时间轴与来源
+## 字幕内容与时间
 
-实时 `start_sample` 从零开始，表示“采集会话已经收到多少音频”，不是 `video.currentTime`。暂停、seek、倍速、切换页面均可能使它偏离视频时间；本阶段不把该时钟导出为视频同步字幕。
+音频统一为 16 kHz 单声道，时间按累计采样数计算。静音也计入时间；模型结束识别所需的补充静音不延长字幕时间。
 
-后续浏览器整段生成需要独立 `MediaResolver`：把来源页面转换成用户可访问的媒体或本地文件，并记录媒体时基、长度、音轨、到期时间以及必要的有限授权。YouTube/Bilibili 的 DASH、签名 URL、分轨、cookie 和接口变化留在 resolver；核心不内置网站规则。服务当前不接受 URL，避免半成品接口暗中获取任意资源。保护内容和 DRM 绕过不进入 resolver 的能力范围。
+一段字幕可以多次更新。`stable_text` 表示近期较少变化的前缀，供界面区分显示；后续结果仍可修正它。客户端按段落编号替换旧文本，收到 `is_final: true` 后再保存最终结果。定稿后的段落不再修改。
 
-## 下一步迭代与验收
+文件字幕保留模型给出的段落时间。换行按显示宽度处理，避免拆开组合字符和表情。按词调整字幕时间需要额外的语音对齐结果，当前只进行换行和时间检查。
 
-| 顺序 | 交付 | 验收条件 |
-| --- | --- | --- |
-| 1 | 固定中/日/英模型及音频集 | 发布模型与数据哈希，测 WER/CER、端点延迟和 P99；明确硬件与线程数 |
-| 2 | 原生 PipeWire source + 预分配 SPSC | 回调无推理、无锁、无分配；设备切换和 graph rate 变化可恢复；断流有计数 |
-| 3 | 桌面显示与事件订阅 | KDE/layer-shell 和 GNOME 方案分别验证全屏、多屏、缩放、输入穿透；渲染器崩溃不影响推理 |
-| 4 | 媒体 resolver + 离线任务 API | 用户主动提交；本地/直接媒体首先可用；可取消、有限并发、完整时间轴与原子导出 |
-| 5 | 大文件分段、对齐与 GPU 实测 | 模型常驻、时间重叠去重、有限内存/磁盘、无人工插值的字幕时间、实时任务不被离线拖慢 |
-| 6 | 原文/翻译/AI 插件 | 定稿 Transcript 可独立重放；翻译不会覆写原文；总结能回指来源时间 |
+## 浏览器与桌面显示
 
-无需现在为每个未来能力创建一个空 crate。出现第二个实现、独立依赖或不同生命周期时再拆边界。
+扩展先等待本地服务加载模型，再申请标签页音频，避免短期有效的捕获凭据在加载期间过期。后台文档持有音频流，因此关闭弹窗后仍能继续捕获。音频在浏览器中转换为 16 kHz，同时通过独立音频输出保留原声音。[tabCapture 接口说明](https://developer.chrome.com/docs/extensions/reference/api/tabCapture)
+
+标签页捕获的时间从开始采集时算起。视频暂停、跳转或变速后，它不再对应视频时间，因此整段视频字幕应从完整媒体文件生成。扩展目前只保存最新状态和字幕预览。
+
+桌面悬浮字幕尚未实现，显示层需要按桌面环境接入。`gtk4-layer-shell` 支持 KDE 和部分使用 wlroots 的桌面；GNOME Wayland 需要评估 Shell 扩展或独立字幕窗口。接入时应在目标桌面检查全屏、多屏、缩放和鼠标穿透。[桌面兼容说明](https://github.com/wmww/gtk4-layer-shell#supported-desktops)
+
+## 后续扩展
+
+- 先选定目标语言的模型和代表性音频，测量准确率、字幕延迟与资源占用，再决定是否增加 GPU 或更换引擎。
+- 系统音频可增加直接调用 PipeWire 的采集模块，处理设备切换和断流。字幕界面订阅字幕事件，不参与音频采集或推理。
+- 网页整段字幕需要独立的媒体获取模块，将可访问的媒体保存为文件，再交给文件识别接口。网站规则与字幕核心分开维护。
+- 翻译和总结读取已定稿的 `Transcript`，保留原文及来源时间。需要任务恢复和历史查询时，再增加持久化存储。
+
+新增模块应对应实际功能或独立依赖，不为尚未实现的能力预先建立空接口。

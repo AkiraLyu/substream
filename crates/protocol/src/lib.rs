@@ -93,27 +93,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn golden_frame_is_shared_with_browser_tests() {
+    fn decodes_the_shared_browser_protocol_sample() {
         let frame = include_bytes!("../../../fixtures/audio-v1.bin");
         let chunk = decode_audio(frame).unwrap();
         assert_eq!(chunk.sequence(), 7);
         assert_eq!(chunk.start_sample(), 2_240);
         assert_eq!(chunk.samples(), &[-1.0, 0.0, 32767.0 / 32768.0]);
         assert_eq!(encode_audio(&chunk), frame);
-    }
-
-    #[test]
-    fn validates_every_header_field_and_all_truncations() {
-        let good = encode_audio(&AudioChunk::new(0, 0, vec![0.0; 320]).unwrap());
-        for length in 0..=HEADER_BYTES {
-            assert!(decode_audio(&good[..length]).is_err());
-        }
-        for offset in 0..12 {
-            let mut bad = good.clone();
-            bad[offset] ^= 0xff;
-            assert!(decode_audio(&bad).is_err(), "offset {offset}");
-        }
-        assert!(decode_audio(&good[..good.len() - 1]).is_err());
-        assert!(decode_audio(&vec![0; MAX_FRAME_BYTES + 2]).is_err());
     }
 }

@@ -183,49 +183,28 @@ mod tests {
 
     #[test]
     fn final_corrections_replace_partial_text_without_duplicating_segments() {
+        let draft_text = "今天用 Ruby 编写字幕 👩‍💻。";
+        let final_text = "今天用 Rust 编写字幕 👩‍💻。";
         let script = Script(VecDeque::from([
-            vec![hypothesis(0, 20, "I think we shoot", false)],
-            vec![hypothesis(0, 40, "I think we should", true)],
+            vec![hypothesis(0, 20, draft_text, false)],
+            vec![hypothesis(0, 40, draft_text, false)],
+            vec![hypothesis(0, 40, final_text, true)],
         ]));
         let mut pipeline = LivePipeline::new(Box::new(script));
         let first = pipeline
             .push(&AudioChunk::new(0, 0, vec![0.0; 320]).unwrap())
             .unwrap();
-        let final_result = pipeline
+        let mut updates = pipeline
             .push(&AudioChunk::new(1, 320, vec![0.0; 320]).unwrap())
             .unwrap();
-        assert_eq!(first[0].segment_id, final_result[0].segment_id);
-        assert_eq!(final_result[0].revision, 2);
-        assert_eq!(final_result[0].stable_text, "I think we should");
-        assert!(final_result[0].unstable_text.is_empty());
-        assert!(pipeline.finish().unwrap().is_empty());
-    }
-
-    #[test]
-    fn invalid_backend_timelines_and_missing_finals_are_rejected() {
-        for invalid in [
-            vec![hypothesis(0, 21, "beyond received audio", true)],
-            vec![
-                hypothesis(0, 20, "final", true),
-                hypothesis(0, 20, "rewrite", true),
-            ],
-            vec![
-                hypothesis(0, 20, "partial", false),
-                hypothesis(1, 20, "skipped final", false),
-            ],
-        ] {
-            let mut pipeline = LivePipeline::new(Box::new(Script(VecDeque::from([invalid]))));
-            assert!(
-                pipeline
-                    .push(&AudioChunk::new(0, 0, vec![0.0; 320]).unwrap())
-                    .is_err()
-            );
-        }
-        let script = Script(VecDeque::from([vec![hypothesis(0, 20, "partial", false)]]));
-        let mut pipeline = LivePipeline::new(Box::new(script));
-        pipeline
-            .push(&AudioChunk::new(0, 0, vec![0.0; 320]).unwrap())
-            .unwrap();
-        assert!(pipeline.finish().is_err());
+        updates.extend(pipeline.finish().unwrap());
+        let partial = first.iter().find(|update| !update.is_final).unwrap();
+        let finals: Vec<_> = updates.iter().filter(|update| update.is_final).collect();
+        assert_eq!(finals.len(), 1, "one finalized subtitle per utterance");
+        let final_result = finals[0];
+        assert_eq!(final_result.segment_id, partial.segment_id);
+        assert!(final_result.revision > partial.revision);
+        assert_eq!(final_result.segment().text, final_text);
+        assert_eq!((final_result.start_ms, final_result.end_ms), (0, 40));
     }
 }

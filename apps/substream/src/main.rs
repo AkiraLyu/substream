@@ -27,7 +27,7 @@ use substream_core::{
 use substream_protocol::{ServerMessage, VERSION};
 
 #[derive(Parser)]
-#[command(version, about = "Local speech/subtitle engine — initial framework")]
+#[command(version, about = "Local speech recognition and subtitles")]
 struct Cli {
     #[command(subcommand)]
     command: Command,

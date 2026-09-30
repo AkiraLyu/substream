@@ -66,11 +66,12 @@ mod tests {
     #[test]
     fn reassembles_short_reads_without_losing_tail_samples() {
         let mut reader = PcmReader::new(ByteReader(&[0, 128, 255, 127]));
-        assert_eq!(
-            reader.next_chunk().unwrap().unwrap().samples(),
-            &[-1.0, 32767.0 / 32768.0]
-        );
-        assert!(reader.next_chunk().unwrap().is_none());
+        let mut samples = Vec::new();
+        while let Some(chunk) = reader.next_chunk().unwrap() {
+            assert_eq!(chunk.start_sample(), samples.len() as u64);
+            samples.extend_from_slice(chunk.samples());
+        }
+        assert_eq!(samples, [-1.0, 32767.0 / 32768.0]);
         assert!(PcmReader::new(&[0_u8][..]).next_chunk().is_err());
     }
 }

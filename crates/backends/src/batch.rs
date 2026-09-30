@@ -12,8 +12,7 @@ use substream_core::transcript::{Segment, Transcript};
 
 use crate::process::{self, Cancellation};
 
-/// Disk-backed normalized audio avoids loading an entire video into Rust RAM.
-/// Native backends may implement this contract with their own windowing policy.
+/// Recognizes a mono 16 kHz WAV file and returns timed subtitle segments.
 pub trait BatchRecognizer {
     fn transcribe(&self, wav: &Path, cancellation: &Cancellation) -> Result<Transcript>;
 }
@@ -24,7 +23,7 @@ pub struct Ffmpeg {
 }
 
 impl Ffmpeg {
-    /// This initial adapter deliberately accepts local regular files only.
+    /// Converts a local media file to mono 16 kHz WAV.
     pub fn decode(&self, input: &Path, output: &Path, cancellation: &Cancellation) -> Result<()> {
         let input = input.canonicalize().context("open local media input")?;
         ensure!(input.is_file(), "media input must be a regular file");
@@ -165,10 +164,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn reads_millisecond_offsets_and_never_treats_bpe_tokens_as_words() {
+    fn imports_text_timing_and_language_and_rejects_invalid_timing() {
         let transcript =
             parse_whisper_json(include_bytes!("../../../fixtures/whisper-output.json")).unwrap();
         assert_eq!(transcript.segments[0].end_ms, 1230);
+        assert_eq!(transcript.segments[0].text, "こんにちは。");
         assert_eq!(transcript.language.as_deref(), Some("ja"));
         assert!(!transcript.synthetic);
         assert!(parse_whisper_json(br#"{"result":{"language":"en"},"transcription":[{"text":"bad","offsets":{"from":20,"to":10}}]}"#).is_err());

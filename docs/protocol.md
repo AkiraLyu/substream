@@ -1,51 +1,52 @@
 # 本地协议 v1
 
-监听默认 `127.0.0.1:9743`。`GET /health` 返回版本文本；`GET /v1/stream` 升级为 WebSocket。非 loopback 绑定被拒绝。一个连接就是一条音频时间轴，不复用 stream_id。
+服务默认监听 `127.0.0.1:9743`，只允许绑定本机回环地址。`GET /health` 返回版本文本，`GET /v1/stream` 建立 WebSocket 连接。每个连接处理一条从零开始的音频时间轴。
 
-## 控制与状态
+## 连接与认证
 
-浏览器 Origin 必须精确匹配 `--allow-origin`；缺失 Origin 仅用于 native client，仍需令牌认证。不提供通配 CORS。第一条消息必须在五秒内是：
+浏览器请求的 `Origin` 必须与 `--allow-origin` 精确匹配。本地客户端可以不发送 `Origin`，但所有客户端都需要令牌认证。
+
+连接后五秒内，第一条消息必须是以下 JSON：
 
 ```json
-{"type":"authenticate","version":1,"token":"<64 hex characters>"}
+{"type":"authenticate","version":1,"token":"<64 位十六进制令牌>"}
 ```
 
-认证成功后获取单路推理配额，加载模型，然后发送：
+认证成功后，服务加载识别模型。准备完成时发送：
 
 ```json
 {"type":"ready","version":1,"backend":{"name":"…","synthetic":false,"languages":["ja"]}}
 ```
 
-收到 ready 后才能送二进制音频。服务不会缓存模型加载期间的音频；客户端不得提前排队。每个连接最多等待 30 秒初始化/空闲/结束处理，网络发送超过三秒视为慢消费者。
+`synthetic` 为 `true` 表示示例字幕，不是真实识别结果。`languages` 是模型支持的语言，空数组表示未指定。
 
-```text
-connect → authenticate → ready → audio* → finish → caption(final)* → finished → close
-                                  └──── malformed/overload/disconnect → cancel
-```
+客户端收到 `ready` 后才能发送音频。发送完毕后，用 `{"type":"finish"}` 请求结束。服务处理完已接收的音频，输出剩余字幕，再发送 `finished` 并关闭连接。
 
-正常结束发送 `{"type":"finish"}`。服务处理完已接收音频并 flush 后才发送 finished。连接突然关闭不等于成功完成，不保证最后一个 partial 已定稿。finished 后重连会从新的零时钟开始。音频之后再次 authenticate 等非法控制消息会结束会话。
+连接意外关闭表示取消，末尾字幕可能尚未定稿。重新连接会开始新的时间轴，不支持续传。
 
-## 音频头
+## 音频格式
 
-每条 binary message 是一个帧。整数为 little endian，头长 24 字节。
+一条二进制消息包含一个音频帧，由 24 字节头和音频采样数据组成。多字节整数使用小端序，即低位字节在前。
 
-| 偏移 | 大小 | 值 |
+| 偏移（字节） | 长度（字节） | 内容 |
 | --- | --- | --- |
-| 0 | 4 | ASCII `SUBS` |
-| 4 | 1 | version = 1 |
-| 5 | 1 | format = 1，PCM signed 16-bit LE |
-| 6 | 1 | channels = 1 |
-| 7 | 1 | reserved = 0 |
-| 8 | 4 | sample_rate = 16000 |
-| 12 | 4 | sequence，起始 0，按 u32 回绕递增 |
-| 16 | 8 | start_sample，起始 0，等于上一帧末尾样本位置 |
-| 24 | N × 2 | PCM payload，1 ≤ N ≤ 3200 |
+| 0 | 4 | ASCII 字符 `SUBS` |
+| 4 | 1 | 版本，固定为 `1` |
+| 5 | 1 | 音频格式，固定为 `1`：16 位有符号整数 PCM |
+| 6 | 1 | 声道数，固定为 `1` |
+| 7 | 1 | 保留字段，固定为 `0` |
+| 8 | 4 | 采样率，固定为 `16000` |
+| 12 | 4 | `sequence`：帧序号，从 `0` 递增，超过 32 位无符号整数上限后回到 `0` |
+| 16 | 8 | `start_sample`：首个采样的位置，从 `0` 开始，等于此前所有帧的采样数之和 |
+| 24 | N × 2 | 音频采样，1 ≤ N ≤ 3200 |
 
-推荐 N=320（20 ms），最后一帧可以更短。最大消息长 6424 字节。长度、格式、版本、采样率、保留位、sequence 和时钟都会检查。PCM 解码为 `sample / 32768.0`。采样数到毫秒使用绝对位置整数换算，不对每个帧长分别取整相加。
+建议每帧 320 个采样，即 20 毫秒；最后一帧可以更短。单条消息最多 6424 字节。服务会检查格式和音频是否连续，缺帧或时间不连续会结束会话。
 
-`fixtures/audio-v1.bin` 是跨 Rust/TypeScript 的 30 字节测试向量：sequence=7，start_sample=2240，payload=[-32768, 0, 32767]。
+转换为浮点音频时，每个采样值除以 `32768.0`。毫秒时间按累计采样位置换算，避免逐帧取整产生误差。
 
-## 字幕事件
+Rust 和 TypeScript 共用 [二进制样本](../fixtures/audio-v1.bin) 检查兼容性：帧序号为 `7`，起始采样位置为 `2240`，音频值为 `[-32768, 0, 32767]`。
+
+## 字幕更新
 
 ```json
 {
@@ -62,12 +63,34 @@ connect → authenticate → ready → audio* → finish → caption(final)* →
 }
 ```
 
-一段的 revision 单调增加，完整文本是 stable_text + unstable_text。稳定前缀可以被后续 revision 修正；final 才可存入已定稿 Transcript。消费者按 segment_id/revision 替换 partial，不将 partial 当新字幕追加。final 后该段不可再变，下一段时间不得与其重叠。文本按纯文本显示，禁止通过 innerHTML 插入。
+`segment_id` 标识一段字幕，`revision` 随该段更新递增。完整文本是 `stable_text` 与 `unstable_text` 的拼接结果。两部分都可能在后续更新中被修正。
+
+客户端应替换同一段的旧文本，避免将每次更新都追加为新字幕。`is_final` 为 `true` 后，该段不再变化，可保存到字幕记录中。下一段的时间不能与它重叠。字幕应作为纯文本显示。
+
+## 完成与错误
 
 ```json
 {"type":"finished","samples_processed":16000,"processing_ms":12}
 ```
 
-processing_ms 是此会话各次 pipeline 调用及 flush 的耗时之和，不包括模型加载、网络、排队或 UI 渲染，不能作为端到端字幕延迟。`error` 含 code 和 message；可能的 code 有 unauthorized、busy、not_ready、bad_audio、bad_control、overloaded、worker_failed、worker_stopped、timeout。错误后当前会话终止，无自动降级后端。
+`samples_processed` 是已处理的采样总数。`processing_ms` 是音频处理和结束处理的累计耗时，不包含模型加载、网络传输、排队或界面渲染；测量用户看到字幕的延迟需要单独计时。
 
-初版没有 renderer 订阅端点、离线 job API、断线续传、视频 seek 映射或持久化 transcript。扩展只保存最新状态与字幕预览，完整历史应由后续 transcript sink 保存。
+错误消息包含 `code` 和 `message`，随后服务结束当前连接：
+
+```json
+{"type":"error","code":"unauthorized","message":"…"}
+```
+
+| 错误代码 | 含义 |
+| --- | --- |
+| `unauthorized` | 首条消息无效、认证超时或令牌错误 |
+| `busy` | 已有实时识别会话 |
+| `not_ready` | 模型就绪前发送了音频或结束请求 |
+| `bad_audio` | 音频帧格式错误 |
+| `bad_control` | 控制消息无效 |
+| `overloaded` | 音频无法继续排队 |
+| `worker_failed` | 识别或音频处理失败 |
+| `worker_stopped` | 识别任务提前退出 |
+| `timeout` | 初始化、等待输入或结束处理超时 |
+
+服务限制音频缓冲量，处理不及时会结束会话。目前无输入的等待时间上限为 30 秒，也用于限制初始化和结束处理；单次网络发送最多等待 3 秒。客户端应按实时速度发送音频，并持续接收字幕。识别失败时不会自动切换到示例模式。

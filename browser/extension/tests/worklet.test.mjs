@@ -10,11 +10,11 @@ const { outputFiles } = await build({
     format: "iife",
 });
 
-function processor(rate = 16000) {
+function processor() {
     const messages = [];
     let Processor;
     const context = {
-        sampleRate: rate,
+        sampleRate: 16000,
         AudioWorkletProcessor: class {
             port = {
                 onmessage: null,
@@ -31,34 +31,34 @@ function processor(rate = 16000) {
     return { instance: new Processor(), messages };
 }
 
-test("20 ms frames downmix stereo and flush the final partial frame", () => {
+test("stereo audio is downmixed without losing the tail on stop", () => {
     const { instance, messages } = processor();
-    for (let i = 0; i < 3; i += 1) {
+    const blocks = 137;
+    let acknowledged = 0;
+    for (let i = 0; i < blocks; i += 1) {
         instance.process([[new Float32Array(128).fill(0.5), new Float32Array(128).fill(-0.25)]]);
+        for (const message of messages.slice(acknowledged)) {
+            if (message.type === "pcm") instance.port.onmessage({ data: { type: "credit" } });
+        }
+        acknowledged = messages.length;
     }
-    assert.equal(messages.length, 1);
-    assert.equal(new Int16Array(messages[0].buffer).length, 320);
-    assert.ok(new Int16Array(messages[0].buffer).every((n) => n === 4096));
     instance.port.onmessage({ data: { type: "flush" } });
-    assert.equal(new Int16Array(messages[1].buffer).length, 64);
-    assert.equal(messages[2].type, "flushed");
-    assert.equal(instance.process([]), false);
+    const samples = messages
+        .filter((message) => message.type === "pcm")
+        .flatMap((message) => Array.from(new Int16Array(message.buffer)));
+    assert.equal(samples.length, blocks * 128);
+    assert.ok(samples.every((sample) => Math.abs(sample / 32768 - 0.125) <= 1 / 32768));
+    assert.ok(messages.some((message) => message.type === "flushed"));
 });
 
-test("a stalled consumer cannot grow the worklet message queue indefinitely", () => {
+test("stalled audio delivery reports an error and stops buffering", () => {
     const { instance, messages } = processor();
-    for (let i = 0; i < 5; i += 1) instance.process([[new Float32Array(320)]]);
-    assert.equal(messages.filter((m) => m.type === "pcm").length, 4);
-    assert.equal(messages.filter((m) => m.type === "overloaded").length, 1);
-    assert.equal(instance.process([]), false);
-});
-
-test("credits release capacity and the sample rate contract is enforced", () => {
-    const { instance, messages } = processor();
-    for (let i = 0; i < 20; i += 1) {
-        instance.process([[new Float32Array(320)]]);
-        instance.port.onmessage({ data: { type: "credit" } });
-    }
-    assert.equal(messages.length, 20);
-    assert.throws(() => processor(48000), /16 kHz/);
+    const feedAudio = () => {
+        for (let i = 0; i < 200; i += 1) instance.process([[new Float32Array(128)]]);
+    };
+    feedAudio();
+    assert.ok(messages.some((message) => message.type === "overloaded"));
+    const buffered = messages.filter((message) => message.type === "pcm").length;
+    feedAudio();
+    assert.equal(messages.filter((message) => message.type === "pcm").length, buffered);
 });

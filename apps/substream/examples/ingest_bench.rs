@@ -1,4 +1,4 @@
-//! A reproducible baseline for framework overhead; it deliberately excludes ASR.
+//! Measures audio decoding and subtitle updates with a synthetic recognizer.
 
 use std::{hint::black_box, time::Instant};
 

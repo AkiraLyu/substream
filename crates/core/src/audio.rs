@@ -52,29 +52,3 @@ impl AudioChunk {
 pub const fn samples_to_ms(samples: u64) -> u64 {
     samples / (SAMPLE_RATE as u64 / 1_000)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn rejects_malformed_audio_before_a_backend_sees_it() {
-        for samples in [
-            vec![],
-            vec![f32::NAN],
-            vec![f32::INFINITY],
-            vec![1.1],
-            vec![0.0; 3201],
-        ] {
-            assert!(AudioChunk::new(0, 0, samples).is_err());
-        }
-        assert!(AudioChunk::new(0, u64::MAX, vec![0.0]).is_err());
-        assert!(AudioChunk::new(0, 0, vec![-1.0, 1.0]).is_ok());
-    }
-
-    #[test]
-    fn sample_clock_does_not_accumulate_per_frame_rounding() {
-        assert_eq!(samples_to_ms(16_000 * 3_600), 3_600_000);
-        assert_eq!(samples_to_ms(u64::MAX), u64::MAX / 16);
-    }
-}

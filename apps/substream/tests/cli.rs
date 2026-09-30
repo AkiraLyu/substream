@@ -3,24 +3,15 @@ use std::{
     io::Write,
     process::{Command, Stdio},
 };
+use substream_protocol::ServerMessage;
 
 #[test]
-fn demo_exports_valid_cues_and_never_overwrites_existing_output() {
+fn refuses_to_overwrite_existing_subtitles() {
     let binary = env!("CARGO_BIN_EXE_substream");
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("captions.vtt");
-    assert!(
-        Command::new(binary)
-            .args(["demo", "--format", "vtt", "--output"])
-            .arg(&path)
-            .output()
-            .unwrap()
-            .status
-            .success()
-    );
-    let contents = fs::read_to_string(&path).unwrap();
-    assert!(contents.starts_with("WEBVTT\n\n1\n00:00:00.000 --> 00:00:01.000"));
-    assert!(contents.contains("00:00:02.000 --> 00:00:02.500"));
+    let contents = "Existing subtitles edited by the user.\n";
+    fs::write(&path, contents).unwrap();
     assert!(
         !Command::new(binary)
             .args(["demo", "--output"])
@@ -44,12 +35,22 @@ fn stdin_eof_preserves_short_audio_and_emits_explicit_demo_provenance() {
     child.stdin.take().unwrap().write_all(&[0; 640]).unwrap();
     let output = child.wait_with_output().unwrap();
     assert!(output.status.success());
-    let events: Vec<serde_json::Value> = String::from_utf8(output.stdout)
+    let events: Vec<ServerMessage> = String::from_utf8(output.stdout)
         .unwrap()
         .lines()
         .map(|line| serde_json::from_str(line).unwrap())
         .collect();
-    assert_eq!(events[0]["backend"]["synthetic"], true);
-    assert_eq!(events[1]["caption"]["end_ms"], 20);
-    assert_eq!(events[2]["samples_processed"], 320);
+    assert!(
+        events.iter().any(
+            |event| matches!(event, ServerMessage::Ready { backend, .. } if backend.synthetic)
+        )
+    );
+    assert!(events.iter().any(|event| matches!(event, ServerMessage::Caption { caption } if caption.is_final && !caption.segment().text.is_empty())));
+    assert!(matches!(
+        events.last(),
+        Some(ServerMessage::Finished {
+            samples_processed: 320,
+            ..
+        })
+    ));
 }

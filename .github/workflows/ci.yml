@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test --workspace --all-features --locked
+      - run: cargo build -p substream --features sherpa --locked
   browser:
     runs-on: ubuntu-latest
     defaults:

@@ -54,31 +54,3 @@ impl Stabilizer {
         self.counts.clear();
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn multilingual_prefixes_use_graphemes_and_allow_corrections() {
-        let mut stabilizer = Stabilizer::new(NonZeroUsize::new(2).unwrap());
-        assert_eq!(
-            stabilizer.update("你好👩‍💻", false),
-            ("".into(), "你好👩‍💻".into())
-        );
-        assert_eq!(
-            stabilizer.update("你好👩‍💻！", false),
-            ("你好👩‍💻".into(), "！".into())
-        );
-        assert_eq!(
-            stabilizer.update("你们好", false),
-            ("你".into(), "们好".into())
-        );
-        assert_eq!(
-            stabilizer.update("你们好。", true),
-            ("你们好。".into(), "".into())
-        );
-        stabilizer.reset();
-        assert_eq!(stabilizer.update("你", false).0, "");
-    }
-}

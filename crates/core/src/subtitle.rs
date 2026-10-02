@@ -91,7 +91,6 @@ mod tests {
             schema_version: 1,
             source: "test".into(),
             language: None,
-            synthetic: true,
             segments: vec![Segment {
                 id: 0,
                 start_ms: 3_661_001,

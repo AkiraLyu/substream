@@ -3,7 +3,6 @@ import QtQuick
 Item {
     id: root
     property string captionText: ""
-    property bool synthetic: false
     property int fontSize: 30
 
     Rectangle {
@@ -25,20 +24,10 @@ Item {
             anchors.margins: 16
             spacing: 6
 
-            Text {
-                visible: root.synthetic
-                width: parent.width
-                text: "演示字幕 · 未进行语音识别"
-                textFormat: Text.PlainText
-                color: "#ffcb80"
-                font.pixelSize: 13
-                horizontalAlignment: Text.AlignHCenter
-            }
-
             Item {
                 width: parent.width
                 height: Math.min(caption.implicitHeight, root.fontSize * 1.4 * 4,
-                                 Math.max(1, root.height - (root.synthetic ? 58 : 32)))
+                                 Math.max(1, root.height - 32))
                 clip: true
 
                 Text {

@@ -37,7 +37,8 @@ pathlib.Path(option('--output-file', '-of') + '.json').write_bytes(result)
     )
     .unwrap();
     fs::set_permissions(&backend, fs::Permissions::from_mode(0o755)).unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_substream"))
+    let mut command = Command::new(env!("CARGO_BIN_EXE_substream"));
+    command
         .arg("transcribe")
         .arg(input)
         .arg("--model")
@@ -45,19 +46,20 @@ pathlib.Path(option('--output-file', '-of') + '.json').write_bytes(result)
         .arg("--whisper-bin")
         .arg(backend)
         .args(["--format", "srt", "--output"])
-        .arg(&subtitles)
-        .output()
-        .unwrap();
+        .arg(&subtitles);
+    let output = command.output().unwrap();
     assert!(
         output.status.success(),
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let contents = fs::read_to_string(subtitles).unwrap();
+    let contents = fs::read_to_string(&subtitles).unwrap();
     assert!(contents.contains("00:00:00,000 --> 00:00:01,230"));
     assert!(contents.contains("こんにちは。"));
     assert!(contents.contains("00:00:01,500 --> 00:00:03,100"));
     assert!(contents.contains("これは字幕のテストです。"));
+    assert!(!command.output().unwrap().status.success());
+    assert_eq!(fs::read_to_string(subtitles).unwrap(), contents);
 }
 
 fn write_stereo_wav(path: &std::path::Path) {

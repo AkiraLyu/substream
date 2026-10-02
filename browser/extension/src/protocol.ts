@@ -17,7 +17,7 @@ export type ServerEvent =
   | {
       type: "ready";
       version: number;
-      backend: { name: string; synthetic: boolean; languages: string[] };
+      backend: { name: string; model: string; threads: number; languages: string[] };
     }
   | { type: "caption"; caption: Caption }
   | { type: "finished"; samples_processed: number; processing_ms: number }

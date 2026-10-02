@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use substream::{
     auth::{Token, create_token},
-    config::{Backend, RecognizerConfig},
+    config::RecognizerConfig,
     server::{ServerConfig, serve},
 };
 use substream_backends::{
@@ -18,12 +18,7 @@ use substream_backends::{
     pcm::PcmReader,
     process::Cancellation,
 };
-use substream_core::{
-    audio::{AudioChunk, FRAME_SAMPLES},
-    pipeline::LivePipeline,
-    subtitle,
-    transcript::Transcript,
-};
+use substream_core::{pipeline::LivePipeline, subtitle, transcript::Transcript};
 use substream_protocol::{ServerMessage, VERSION};
 
 #[derive(Parser)]
@@ -35,11 +30,6 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Run a deterministic synthetic pipeline. No model or speech recognition.
-    Demo {
-        #[command(flatten)]
-        output: Output,
-    },
     /// Read raw mono 16 kHz PCM16LE from stdin; emit NDJSON caption events.
     Stream {
         #[command(flatten)]
@@ -84,16 +74,16 @@ enum Command {
 
 #[derive(Args)]
 struct Recognizer {
-    /// Explicit selection prevents synthetic output being mistaken for real ASR.
-    #[arg(long, value_enum)]
-    backend: Backend,
     #[arg(long)]
-    config: Option<PathBuf>,
+    config: PathBuf,
+    /// Override the inference thread count from the model configuration.
+    #[arg(long, value_parser = clap::value_parser!(i32).range(1..=64))]
+    threads: Option<i32>,
 }
 
 impl Recognizer {
     fn load(&self) -> Result<RecognizerConfig> {
-        RecognizerConfig::load(self.backend, self.config.as_deref())
+        RecognizerConfig::load(&self.config, self.threads)
     }
 }
 
@@ -128,7 +118,6 @@ async fn main() -> Result<()> {
             eprintln!("Token created: {}", output.display());
             Ok(())
         }
-        Command::Demo { output } => write_transcript(&demo()?, output),
         Command::Stream { recognizer } => stream(recognizer.load()?),
         Command::Serve {
             listen,
@@ -140,7 +129,7 @@ async fn main() -> Result<()> {
                 address: listen,
                 token: Token::read(&token_file)?,
                 allowed_origins: origins,
-                recognizer: recognizer.load()?,
+                recognizer: recognizer.load()?.factory(),
             })
             .await
         }
@@ -191,37 +180,6 @@ async fn main() -> Result<()> {
             write_transcript(&result??, output)
         }
     }
-}
-
-fn demo() -> Result<Transcript> {
-    eprintln!("DEMO: synthetic captions; no speech recognition is performed.");
-    let mut pipeline = LivePipeline::new(RecognizerConfig::Demo.create()?);
-    let mut transcript = Transcript {
-        schema_version: 1,
-        source: "synthetic demo".into(),
-        language: Some("zh".into()),
-        synthetic: true,
-        segments: vec![],
-    };
-    for sequence in 0..125 {
-        let chunk = AudioChunk::new(
-            sequence,
-            u64::from(sequence) * FRAME_SAMPLES as u64,
-            vec![0.0; FRAME_SAMPLES],
-        )?;
-        transcript.segments.extend(
-            pipeline
-                .push(&chunk)?
-                .into_iter()
-                .filter(|u| u.is_final)
-                .map(|u| u.segment()),
-        );
-    }
-    transcript
-        .segments
-        .extend(pipeline.finish()?.iter().map(|u| u.segment()));
-    transcript.validate()?;
-    Ok(transcript)
 }
 
 fn stream(config: RecognizerConfig) -> Result<()> {

@@ -28,7 +28,7 @@ use tokio::{
 
 use crate::{
     auth::Token,
-    config::RecognizerConfig,
+    config::RecognizerFactory,
     display::DisplayHub,
     worker::{self, QueuedAudio},
 };
@@ -37,7 +37,7 @@ use crate::{
 struct AppState {
     token: Token,
     allowed_origins: Vec<String>,
-    recognizer: RecognizerConfig,
+    recognizer: RecognizerFactory,
     connections: Arc<Semaphore>,
     inference: Arc<Semaphore>,
     display_connections: Arc<Semaphore>,
@@ -49,7 +49,7 @@ pub struct ServerConfig {
     pub address: SocketAddr,
     pub token: Token,
     pub allowed_origins: Vec<String>,
-    pub recognizer: RecognizerConfig,
+    pub recognizer: RecognizerFactory,
 }
 
 pub async fn serve(config: ServerConfig) -> Result<()> {

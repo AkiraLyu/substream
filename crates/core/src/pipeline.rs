@@ -157,7 +157,8 @@ mod tests {
         fn info(&self) -> BackendInfo {
             BackendInfo {
                 name: "test".into(),
-                synthetic: true,
+                model: "test fixture".into(),
+                threads: 1,
                 languages: vec![],
             }
         }

@@ -13,6 +13,8 @@ pub struct SherpaRecognizer {
     stream: OnlineStream,
     recognizer: OnlineRecognizer,
     languages: Vec<String>,
+    model: String,
+    threads: i32,
     received: u64,
     segment_start: u64,
     segment_id: u64,
@@ -42,6 +44,8 @@ impl SherpaRecognizer {
             stream,
             recognizer,
             languages: config.languages.clone(),
+            model: config.encoder.display().to_string(),
+            threads: config.threads,
             received: 0,
             segment_start: 0,
             segment_id: 0,
@@ -84,7 +88,8 @@ impl StreamingRecognizer for SherpaRecognizer {
     fn info(&self) -> BackendInfo {
         BackendInfo {
             name: "sherpa-onnx / streaming transducer / CPU".into(),
-            synthetic: false,
+            model: self.model.clone(),
+            threads: self.threads,
             languages: self.languages.clone(),
         }
     }

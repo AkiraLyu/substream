@@ -152,7 +152,6 @@ pub fn parse_whisper_json(bytes: &[u8]) -> Result<Transcript> {
         schema_version: 1,
         source: "whisper.cpp".into(),
         language: Some(output.result.language),
-        synthetic: false,
         segments,
     };
     transcript.validate()?;
@@ -170,7 +169,6 @@ mod tests {
         assert_eq!(transcript.segments[0].end_ms, 1230);
         assert_eq!(transcript.segments[0].text, "こんにちは。");
         assert_eq!(transcript.language.as_deref(), Some("ja"));
-        assert!(!transcript.synthetic);
         assert!(parse_whisper_json(br#"{"result":{"language":"en"},"transcription":[{"text":"bad","offsets":{"from":20,"to":10}}]}"#).is_err());
     }
 }

@@ -45,10 +45,8 @@ bool KdeWindow::initialize(QString* error)
         return false;
     }
     rootObject()->setProperty("fontSize", m_options.fontSize);
-    connect(&m_captions, &CaptionModel::changed, this, [this] {
-        rootObject()->setProperty("captionText", m_captions.text());
-        rootObject()->setProperty("synthetic", m_captions.synthetic());
-    });
+    connect(&m_captions, &CaptionModel::changed, this,
+        [this] { rootObject()->setProperty("captionText", m_captions.text()); });
     connect(selected, &QScreen::geometryChanged, this, [this] { fitScreen(); });
     connect(qGuiApp, &QGuiApplication::screenRemoved, this, [this, selected](QScreen* removed) {
         if (removed == selected) {

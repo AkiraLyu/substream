@@ -3,7 +3,6 @@ use std::time::Duration;
 use futures_util::{SinkExt, StreamExt};
 use substream::{
     auth::{Token, create_token},
-    config::RecognizerConfig,
     server::{ServerConfig, router},
 };
 use substream_core::audio::AudioChunk;
@@ -46,7 +45,7 @@ impl TestServer {
                 address,
                 token: Token::read(&path).unwrap(),
                 allowed_origins: vec!["chrome-extension://test".into()],
-                recognizer: RecognizerConfig::Demo,
+                recognizer: std::sync::Arc::new(|| Ok(Box::<Utterance>::default())),
             },
             receiver,
         );
@@ -108,9 +107,10 @@ async fn event(socket: &mut Socket) -> ServerMessage {
 async fn stopping_a_stream_delivers_final_captions_and_accounts_for_all_audio() {
     let server = TestServer::start().await;
     let mut socket = server.connect(&server.token).await;
-    assert!(
-        matches!(event(&mut socket).await, ServerMessage::Ready { backend, .. } if backend.synthetic)
-    );
+    assert!(matches!(
+        event(&mut socket).await,
+        ServerMessage::Ready { .. }
+    ));
     let chunk = AudioChunk::new(0, 0, vec![0.0; 1000]).unwrap();
     socket
         .send(Message::Binary(encode_audio(&chunk).into()))
@@ -246,7 +246,7 @@ async fn display_reconnects_to_latest_subtitles_without_interrupting_recognition
         latest.caption.as_ref().unwrap(),
         final_caption.as_ref().unwrap()
     );
-    assert!(latest.backend.unwrap().synthetic);
+    assert_eq!(latest.backend.unwrap().model, "transport fixture");
     assert!(latest.caption_age_ms.is_some());
 
     let mut next_audio = server.connect(&server.token).await;
@@ -291,4 +291,42 @@ async fn display_requires_authentication_and_rejects_audio_controls() {
     assert!(
         matches!(event(&mut viewer).await, ServerMessage::Error { code, .. } if code == "read_only")
     );
+}
+
+// A single pending utterance isolates the transport contract from model accuracy.
+#[derive(Default)]
+struct Utterance {
+    samples: u64,
+}
+
+impl substream_core::asr::StreamingRecognizer for Utterance {
+    fn info(&self) -> substream_core::asr::BackendInfo {
+        substream_core::asr::BackendInfo {
+            name: "test recognizer".into(),
+            model: "transport fixture".into(),
+            threads: 1,
+            languages: vec!["zh".into()],
+        }
+    }
+    fn push(
+        &mut self,
+        chunk: &AudioChunk,
+    ) -> substream_core::Result<Vec<substream_core::asr::Hypothesis>> {
+        self.samples = chunk.end_sample();
+        Ok(vec![])
+    }
+    fn finish(&mut self) -> substream_core::Result<Vec<substream_core::asr::Hypothesis>> {
+        if self.samples == 0 {
+            return Ok(vec![]);
+        }
+        Ok(vec![substream_core::asr::Hypothesis {
+            segment: substream_core::transcript::Segment {
+                id: 0,
+                start_ms: 0,
+                end_ms: substream_core::audio::samples_to_ms(self.samples),
+                text: "末尾字幕".into(),
+            },
+            is_final: true,
+        }])
+    }
 }

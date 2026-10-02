@@ -10,7 +10,7 @@ use substream_core::{audio::AudioChunk, pipeline::LivePipeline};
 use substream_protocol::{ServerMessage, VERSION};
 use tokio::sync::{OwnedSemaphorePermit, mpsc};
 
-use crate::config::RecognizerConfig;
+use crate::config::RecognizerFactory;
 
 pub const AUDIO_QUEUE_CAPACITY: usize = 8;
 pub const EVENT_QUEUE_CAPACITY: usize = 32;
@@ -22,7 +22,7 @@ pub struct QueuedAudio {
 }
 
 pub fn run(
-    config: RecognizerConfig,
+    config: RecognizerFactory,
     mut input: mpsc::Receiver<QueuedAudio>,
     output: mpsc::Sender<ServerMessage>,
     finish: Arc<AtomicBool>,
@@ -32,7 +32,7 @@ pub fn run(
         if output.is_closed() {
             return Ok(());
         }
-        let mut pipeline = LivePipeline::new(config.create()?);
+        let mut pipeline = LivePipeline::new(config()?);
         output.blocking_send(ServerMessage::Ready {
             version: VERSION,
             backend: pipeline.info(),

@@ -12,7 +12,7 @@ QJsonObject caption(int revision, const QString& text, bool final = false)
 QJsonObject snapshot(int session, const QJsonObject& caption, int ageMs = 0)
 {
     return { { "type", "display" }, { "version", 1 }, { "session_id", session },
-        { "status", "listening" }, { "backend", QJsonObject { { "synthetic", true } } },
+        { "status", "listening" }, { "backend", QJsonObject { { "name", "sherpa-onnx" } } },
         { "caption", caption }, { "caption_age_ms", ageMs } };
 }
 }
@@ -27,7 +27,6 @@ private slots:
         QString error;
         QVERIFY(model.apply(snapshot(1, caption(1, "今天用 Ruby")), &error));
         QVERIFY(model.visible());
-        QVERIFY(model.synthetic());
         QVERIFY(model.apply(
             snapshot(1, caption(3, "今天用 Rust 👩‍💻 <字幕>", true)), &error));
         QCOMPARE(model.text(), QString("今天用 Rust 👩‍💻 <字幕>"));
@@ -42,7 +41,7 @@ private slots:
         CaptionModel model(60);
         QString error;
         QVERIFY(model.apply({ { "type", "ready" }, { "version", 1 },
-                                { "backend", QJsonObject { { "synthetic", false } } } },
+                                { "backend", QJsonObject { { "name", "sherpa-onnx" } } } },
             &error));
         QVERIFY(model.apply(
             { { "type", "caption" }, { "caption", caption(1, "最后一句", true) } }, &error));

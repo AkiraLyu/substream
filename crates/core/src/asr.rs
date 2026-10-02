@@ -5,7 +5,9 @@ use crate::{Result, audio::AudioChunk, transcript::Segment};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackendInfo {
     pub name: String,
-    pub synthetic: bool,
+    /// Encoder model path identifying the loaded model.
+    pub model: String,
+    pub threads: i32,
     /// Model-specific; an empty list means unspecified, not every language.
     pub languages: Vec<String>,
 }

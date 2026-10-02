@@ -11,7 +11,7 @@ interface DisplayEvent {
   type: string;
   message?: string;
   caption?: Caption;
-  backend?: { name: string; synthetic: boolean };
+  backend?: { name: string; model: string; threads: number };
 }
 
 function show(value: unknown): void {
@@ -24,10 +24,7 @@ function show(value: unknown): void {
   }
   start.disabled = ["starting", "ready", "stopping"].includes(event.type);
   stop.disabled = event.type !== "ready";
-  if (event.type === "ready")
-    status.textContent = event.backend?.synthetic
-      ? "演示模式 · 字幕为合成内容，不进行语音识别"
-      : `正在识别 · ${event.backend?.name ?? ""}`;
+  if (event.type === "ready") status.textContent = `正在识别 · ${event.backend?.name ?? ""}`;
   if (event.type === "starting") {
     status.textContent = "连接服务并加载模型…";
     stable.textContent = "";

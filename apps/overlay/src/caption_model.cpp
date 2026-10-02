@@ -22,7 +22,6 @@ void CaptionModel::reset()
     m_segment = -1;
     m_revision = -1;
     m_final = false;
-    m_synthetic = false;
 }
 
 bool CaptionModel::applyCaption(const QJsonObject& caption, qint64 ageMs, QString* error)
@@ -73,7 +72,6 @@ bool CaptionModel::apply(const QJsonObject& event, QString* error)
             *error = QStringLiteral("Unknown display status");
             return false;
         }
-        m_synthetic = event.value("backend").toObject().value("synthetic").toBool();
         if (event.value("caption").isNull()) {
             clear();
             return true;
@@ -87,7 +85,6 @@ bool CaptionModel::apply(const QJsonObject& event, QString* error)
             return false;
         }
         reset();
-        m_synthetic = event.value("backend").toObject().value("synthetic").toBool();
         return true;
     }
     if (type == "caption") {

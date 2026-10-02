@@ -12,7 +12,7 @@ Substream 分别处理实时字幕和文件字幕。实时识别需要持续接�
 | whisper.cpp CLI | 用于完整文件识别，提供段落文本和时间。进程接口便于独立安装和替换引擎，每次任务都需要重新加载模型。 |
 | FFmpeg | 统一解码常见媒体格式，将音轨转换为识别所需的采样率和声道数。 |
 | TypeScript 与 Chromium 扩展 API | 通过 `tabCapture` 获取用户选择的标签页音频，用后台文档维持捕获，以 `AudioWorklet` 处理音频；类型检查帮助约束各部分的消息格式。 |
-| Qt Quick 与 LayerShellQt | Qt Quick 负责文本排版和屏幕缩放，LayerShellQt 将窗口放入 KDE Wayland 的悬浮层。C++ 显示端独立运行，通过 JSON 接收字幕，不加载识别模型。 |
+| Qt Widgets、Qt Quick 与 LayerShellQt | Widgets 提供参数表单和文件选择，Quick 负责字幕排版和缩放，LayerShellQt 将字幕放入 KDE Wayland 悬浮层。界面通过异步子进程和 JSON 连接识别服务，模型加载不会阻塞窗口。 |
 
 接口用法可查阅 [sherpa-onnx Rust 文档](https://k2-fsa.github.io/sherpa/onnx/rust-api/index.html)、[whisper.cpp CLI](https://github.com/ggml-org/whisper.cpp/tree/master/examples/cli) 和 [Chrome 音频捕获说明](https://developer.chrome.com/docs/extensions/how-to/web-platform/screen-capture)。
 
@@ -20,7 +20,9 @@ Substream 分别处理实时字幕和文件字幕。实时识别需要持续接�
 
 ```mermaid
 flowchart LR
-    P[系统音频 / pw-cat] --> R[标准输入]
+    G[桌面参数窗口] --> P[系统音频 / pw-cat]
+    G --> N[本地 WebSocket 服务]
+    P --> R[标准输入]
     B[浏览器标签页] --> W[AudioWorklet]
     W --> N[本地 WebSocket 服务]
     R --> S[实时识别]
@@ -59,10 +61,16 @@ KDE 显示端通过 LayerShellQt 创建悬浮窗口，设置鼠标穿透、无�
 
 显示程序有两种输入：`stream` 命令的逐行 JSON，以及本地服务的 `/v1/display` 订阅。订阅使用相同的令牌认证，只返回最新字幕状态，不接收音频，也不占用识别会话。服务合并尚未发送的更新，显示程序关闭或读取缓慢不会阻塞推理。
 
+桌面程序的 `MainWindow` 编辑参数并显示状态，`AudioDevices` 从 `pw-dump` 读取输入、输出设备，`SessionController` 管理采集和识别进程。模型返回就绪消息后才启动采集。音频使用设备的 `object.serial` 定位，设备断开时停止，不切换到其他输入。
+
+系统音频由 `pw-cat` 转为 16 kHz 单声道 PCM，经有界缓冲送入 `substream stream`。待发送音频超过 250 毫秒时停止并报告积压。正常停止先结束采集，再关闭识别进程的标准输入，让它输出末尾字幕。设置保存在 Qt 的用户配置目录，令牌单独保存为私有文件。
+
+浏览器模式启动本地服务并订阅显示状态。模型在浏览器开始会话时加载，界面据此显示加载状态、标签页名称和已接收音频时长。停止服务会取消浏览器会话；需要保留末尾字幕时，应先在扩展中停止捕获。
+
 `CaptionModel` 处理段落替换和显示时长，`EventSource` 接收消息，`KdeWindow` 负责 KDE 窗口设置，QML 负责排版。桌面无关的消息类型定义在 `substream-protocol::display` 中。GNOME Shell 扩展可以直接订阅该接口，不需要使用 Qt 或修改识别核心；当前尚未提供 GNOME 显示端。
 
 ## 其他扩展接口
 
-`StreamingRecognizer` 接收连续音频，`BatchRecognizer` 接收完整音频文件，两者返回统一的字幕数据。系统音频目前通过标准输入接入，媒体输入目前只接受本地文件。音频采集和网站媒体获取应分别放在输入模块中。
+`RecognizerFactory` 在每次会话中创建识别器，便于嵌入本地服务和替换推理引擎。`StreamingRecognizer` 接收连续音频，`BatchRecognizer` 接收完整音频文件，两者返回统一的字幕数据。系统音频目前通过标准输入接入，媒体输入目前只接受本地文件。音频采集和网站媒体获取应分别放在输入模块中。
 
 已定稿的 `Transcript` 包含文本和来源时间，可供翻译、总结或历史记录使用。这些功能不需要接触音频采集回调。

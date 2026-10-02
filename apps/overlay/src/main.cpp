@@ -1,54 +1,29 @@
 #include "caption_model.h"
 #include "event_source.h"
 #include "kde_window.h"
+#include "main_window.h"
+#include "token_file.h"
+#include <QApplication>
 
 #include <QCommandLineParser>
-#include <QFile>
-#include <QFileInfo>
 #include <QGuiApplication>
 #include <QHostAddress>
-#include <QRegularExpression>
 #include <QScreen>
 #include <QTextStream>
 
 #include <optional>
 
-namespace {
-std::optional<QString> readToken(const QString& path)
-{
-    const QFileInfo info(path);
-    constexpr auto sharedPermissions = QFile::ReadGroup | QFile::WriteGroup | QFile::ExeGroup
-        | QFile::ReadOther | QFile::WriteOther | QFile::ExeOther;
-    if (!info.isFile() || info.isSymLink() || (info.permissions() & sharedPermissions)
-        || info.size() > 128) {
-        qCritical("Token must be a private regular file (mode 0600)");
-        return std::nullopt;
-    }
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) {
-        qCritical("Cannot read token file");
-        return std::nullopt;
-    }
-    const auto token = QString::fromUtf8(file.read(129)).trimmed();
-    static const QRegularExpression pattern(QStringLiteral("^[a-fA-F0-9]{64}$"));
-    if (!pattern.match(token).hasMatch()) {
-        qCritical("Token must contain 64 hexadecimal characters");
-        return std::nullopt;
-    }
-    return token;
-}
-}
-
 int main(int argc, char** argv)
 {
     qputenv("QT_FORCE_STDERR_LOGGING", "1");
-    QGuiApplication app(argc, argv);
+    QApplication app(argc, argv);
+    QCoreApplication::setOrganizationName(QStringLiteral("Substream"));
     QCoreApplication::setApplicationName(QStringLiteral("substream-overlay"));
     QCoreApplication::setApplicationVersion(QStringLiteral("0.1.0"));
     QGuiApplication::setDesktopFileName(QStringLiteral("substream-overlay"));
 
     QCommandLineParser parser;
-    parser.setApplicationDescription(QStringLiteral("KDE Wayland caption overlay"));
+    parser.setApplicationDescription(QStringLiteral("Desktop controls and KDE Wayland captions"));
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addOptions({
@@ -57,8 +32,6 @@ int main(int argc, char** argv)
             "Subscribe to the local subtitle service using a private token file.", "path" },
         { QStringLiteral("server"), "Display WebSocket URL (loopback only).", "url",
             "ws://127.0.0.1:9743/v1/display" },
-        { QStringLiteral("preview"),
-            "Show a synthetic subtitle to preview placement and text size." },
         { QStringLiteral("list-screens"), "List available display names and exit." },
         { QStringLiteral("screen"), "Display name; defaults to the primary display.", "name" },
         { QStringLiteral("width"), "Maximum width in logical pixels.", "pixels", "900" },
@@ -77,17 +50,21 @@ int main(int argc, char** argv)
         }
         return 0;
     }
-    if (!QGuiApplication::platformName().startsWith("wayland")
-        || !qEnvironmentVariable("XDG_CURRENT_DESKTOP")
-            .split(':')
-            .contains("KDE", Qt::CaseInsensitive)) {
+    const bool kdeWayland = QGuiApplication::platformName().startsWith("wayland")
+        && qEnvironmentVariable("XDG_CURRENT_DESKTOP")
+               .split(':')
+               .contains("KDE", Qt::CaseInsensitive);
+    if (!parser.isSet("stdin") && !parser.isSet("token-file")) {
+        MainWindow window(kdeWayland);
+        window.show();
+        return app.exec();
+    }
+    if (!kdeWayland) {
         qCritical("This renderer requires a KDE Plasma Wayland session");
         return 1;
     }
-    const auto sources = int(parser.isSet("stdin")) + int(parser.isSet("token-file"))
-        + int(parser.isSet("preview"));
-    if (sources != 1) {
-        qCritical("Choose exactly one source: --stdin, --token-file, or --preview");
+    if (parser.isSet("stdin") && parser.isSet("token-file")) {
+        qCritical("Choose either --stdin or --token-file");
         return 1;
     }
     const auto number
@@ -116,9 +93,12 @@ int main(int argc, char** argv)
             qCritical("Server must be a loopback ws:// address with path /v1/display");
             return 1;
         }
-        token = readToken(parser.value("token-file"));
-        if (!token)
+        QString error;
+        token = readToken(parser.value("token-file"), &error);
+        if (!token) {
+            qCritical().noquote() << error;
             return 1;
+        }
     }
     CaptionModel captions(*hold);
     EventSource source;
@@ -154,21 +134,6 @@ int main(int argc, char** argv)
         }
     } else if (token) {
         source.startSocket(server, *token);
-    } else {
-        QTimer::singleShot(0, &app, [&] {
-            QString error;
-            captions.apply({ { "type", "ready" }, { "version", 1 },
-                               { "backend", QJsonObject { { "synthetic", true } } } },
-                &error);
-            captions.apply(
-                { { "type", "caption" },
-                    { "caption",
-                        QJsonObject { { "segment_id", 0 }, { "revision", 1 }, { "is_final", true },
-                            { "stable_text", "实时字幕 · 日本語の字幕 · Live captions" },
-                            { "unstable_text", "" } } } },
-                &error);
-            QTimer::singleShot(*hold, &app, &QCoreApplication::quit);
-        });
     }
     return app.exec();
 }

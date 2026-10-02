@@ -16,6 +16,9 @@ public:
     ~EventSource() override;
 
     bool startStdin(QString* error);
+    void stop();
+    bool feed(const QByteArray& data);
+    bool finishInput();
     void startSocket(const QUrl& url, const QString& token);
 
 signals:

@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux:base-devel
     steps:
-      - run: pacman -Syu --noconfirm --needed git cmake ninja clang qt6-declarative qt6-websockets layer-shell-qt
+      - run: pacman -Syu --noconfirm --needed git cmake ninja clang qt6-base qt6-declarative qt6-websockets layer-shell-qt
       - uses: actions/checkout@v4
       - run: clang-format --dry-run --Werror apps/overlay/src/*.cpp apps/overlay/src/*.h apps/overlay/tests/*.cpp
       - run: /usr/lib/qt6/bin/qmllint apps/overlay/qml/Overlay.qml

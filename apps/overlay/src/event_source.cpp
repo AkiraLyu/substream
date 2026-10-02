@@ -8,6 +8,7 @@
 #include <cstring>
 #include <fcntl.h>
 #include <unistd.h>
+#include <utility>
 
 namespace {
 constexpr qsizetype MaxEventBytes = 64 * 1024;
@@ -78,25 +79,12 @@ void EventSource::readStdin()
         }
         if (count == 0) {
             m_stdin->setEnabled(false);
-            if (m_buffer.trimmed().isEmpty() || decode(m_buffer))
+            if (finishInput())
                 emit ended();
             return;
         }
-        m_buffer.append(bytes, count);
-        qsizetype end;
-        while ((end = m_buffer.indexOf('\n')) >= 0) {
-            const auto line = m_buffer.first(end);
-            m_buffer.remove(0, end + 1);
-            if (end > MaxEventBytes || (!line.trimmed().isEmpty() && !decode(line))) {
-                m_stdin->setEnabled(false);
-                if (end > MaxEventBytes)
-                    emit failed(QStringLiteral("Caption message is too large"));
-                return;
-            }
-        }
-        if (m_buffer.size() > MaxEventBytes) {
+        if (!feed(QByteArray(bytes, count))) {
             m_stdin->setEnabled(false);
-            emit failed(QStringLiteral("Caption message is too large"));
             return;
         }
     }
@@ -132,4 +120,45 @@ void EventSource::startSocket(const QUrl& url, const QString& token)
     });
     m_socket.open(url);
     m_handshake.start();
+}
+
+void EventSource::stop()
+{
+    m_fatal = true;
+    m_reconnect.stop();
+    m_handshake.stop();
+    if (m_stdin)
+        m_stdin->setEnabled(false);
+    m_socket.abort();
+}
+
+bool EventSource::feed(const QByteArray& data)
+{
+    if (m_fatal)
+        return false;
+    m_buffer += data;
+    qsizetype end;
+    while ((end = m_buffer.indexOf('\n')) >= 0) {
+        const auto line = m_buffer.first(end);
+        m_buffer.remove(0, end + 1);
+        if (end > MaxEventBytes) {
+            m_fatal = true;
+            emit failed(QStringLiteral("Caption message is too large"));
+            return false;
+        }
+        if (!line.trimmed().isEmpty() && !decode(line))
+            return false;
+    }
+    if (m_buffer.size() > MaxEventBytes) {
+        m_fatal = true;
+        emit failed(QStringLiteral("Caption message is too large"));
+        return false;
+    }
+    return true;
+}
+
+bool EventSource::finishInput()
+{
+    const auto tail = std::exchange(m_buffer, { });
+    return !m_fatal && (tail.trimmed().isEmpty() || decode(tail));
 }

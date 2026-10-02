@@ -1,9 +1,10 @@
 [Desktop Entry]
 Type=Application
-Name=Substream subtitles
-Name[zh_CN]=Substream 悬浮字幕
-Comment=Desktop captions for local speech recognition
-Exec=substream-overlay --preview
+Name=Substream
+Name[zh_CN]=Substream 实时字幕
+Comment=Capture audio and display local speech captions
+Comment[zh_CN]=捕获音频并显示本地语音识别字幕
+Exec=substream-overlay
 Icon=preferences-desktop-font
-NoDisplay=true
 Terminal=false
+Categories=AudioVideo;Audio;Accessibility;

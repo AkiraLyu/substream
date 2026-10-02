@@ -19,14 +19,14 @@ class Capture {
   private finishTimer: ReturnType<typeof setTimeout> | null = null;
   private ready: ServerEvent | null = null;
 
-  async connect(token: string): Promise<void> {
+  async connect(token: string, source: string): Promise<void> {
     try {
       const socket = new WebSocket("ws://127.0.0.1:9743/v1/stream");
       this.socket = socket;
       await new Promise<void>((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error("本地服务连接或模型加载超时")), 30_000);
         socket.onopen = () =>
-          socket.send(JSON.stringify({ type: "authenticate", version: 1, token }));
+          socket.send(JSON.stringify({ type: "authenticate", version: 1, token, source }));
         socket.onerror = () => {
           clearTimeout(timer);
           reject(new Error("无法连接本地 Substream 服务"));
@@ -204,7 +204,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
     if (message.type === "prepare") {
       if (active) throw new Error("Capture is already active");
       active = new Capture();
-      await active.connect(message.token as string);
+      await active.connect(message.token as string, message.source as string);
       return;
     }
     if (message.type === "start") {

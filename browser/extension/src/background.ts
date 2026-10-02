@@ -44,11 +44,15 @@ async function handle(message: Request): Promise<void> {
         justification: "Capture user-selected tab audio for local live captions",
       });
     }
+    const tab = await chrome.tabs.get(message.tabId);
     // Stream IDs expire within seconds. Load the model before allocating an ID.
     const preparation = await chrome.runtime.sendMessage({
       target: "offscreen",
       type: "prepare",
       token: message.token,
+      source: Array.from(tab.title ?? `标签页 ${message.tabId}`)
+        .slice(0, 120)
+        .join(""),
     });
     if (!preparation?.ok) throw new Error(preparation?.error ?? "Daemon preparation failed");
     prepared = true;

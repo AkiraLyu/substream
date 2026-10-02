@@ -36,7 +36,7 @@ impl DisplayHub {
         self.0.subscribe()
     }
 
-    pub fn start(&self) -> DisplaySession {
+    pub fn start(&self, source: Option<String>) -> DisplaySession {
         let mut id = 0;
         self.0.send_modify(|record| {
             id = record.state.session_id.wrapping_add(1);
@@ -44,6 +44,7 @@ impl DisplayHub {
                 state: DisplayState {
                     session_id: id,
                     status: DisplayStatus::Loading,
+                    source,
                     ..DisplayState::default()
                 },
                 caption_at: None,
@@ -62,6 +63,16 @@ pub(crate) struct DisplaySession {
 }
 
 impl DisplaySession {
+    pub fn progress(&self, samples: u64) {
+        self.hub.0.send_if_modified(|record| {
+            if record.state.session_id != self.id {
+                return false;
+            }
+            record.state.samples_received = samples;
+            true
+        });
+    }
+
     pub fn publish(&self, event: &ServerMessage) {
         self.hub.0.send_if_modified(|record| {
             if record.state.session_id != self.id {
@@ -76,7 +87,12 @@ impl DisplaySession {
                     record.state.caption = Some(caption.clone());
                     record.caption_at = Some(Instant::now());
                 }
-                ServerMessage::Finished { .. } => record.state.status = DisplayStatus::Finished,
+                ServerMessage::Finished {
+                    samples_processed, ..
+                } => {
+                    record.state.status = DisplayStatus::Finished;
+                    record.state.samples_received = *samples_processed;
+                }
                 ServerMessage::Error { message, .. } => {
                     record.state.status = DisplayStatus::Error;
                     record.state.message = Some(message.clone());

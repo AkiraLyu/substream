@@ -73,7 +73,7 @@ impl TestServer {
         let (mut socket, _) = connect_async(url).await.unwrap();
         socket
             .send(Message::Text(
-                serde_json::json!({"type":"authenticate", "version":1, "token":token})
+                serde_json::json!({"type":"authenticate", "version":1, "token":token, "source":"浏览器标签页"})
                     .to_string()
                     .into(),
             ))
@@ -248,6 +248,8 @@ async fn display_reconnects_to_latest_subtitles_without_interrupting_recognition
     );
     assert_eq!(latest.backend.unwrap().model, "transport fixture");
     assert!(latest.caption_age_ms.is_some());
+    assert_eq!(latest.source.as_deref(), Some("浏览器标签页"));
+    assert_eq!(latest.samples_received, 1000);
 
     let mut next_audio = server.connect(&server.token).await;
     assert!(matches!(

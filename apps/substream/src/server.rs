@@ -164,27 +164,29 @@ async fn fail(socket: &mut WebSocket, code: &str, message: &str) {
     let _ = timeout(Duration::from_secs(1), socket.close()).await;
 }
 
-async fn authenticate(socket: &mut WebSocket, token: &Token) -> bool {
-    let authenticated = match timeout(Duration::from_secs(5), socket.recv()).await {
-        Ok(Some(Ok(Message::Text(text)))) => matches!(
-            serde_json::from_str::<ClientMessage>(&text),
-            Ok(ClientMessage::Authenticate { version: VERSION, token: supplied }) if token.matches(&supplied)
-        ),
-        _ => false,
-    };
-    if !authenticated {
-        fail(
-            socket,
-            "unauthorized",
-            "valid v1 authentication is required as the first message",
-        )
-        .await;
+async fn authenticate(socket: &mut WebSocket, token: &Token) -> Option<Option<String>> {
+    if let Ok(Some(Ok(Message::Text(text)))) = timeout(Duration::from_secs(5), socket.recv()).await
+        && let Ok(ClientMessage::Authenticate {
+            version: VERSION,
+            token: supplied,
+            source,
+        }) = serde_json::from_str::<ClientMessage>(&text)
+        && token.matches(&supplied)
+        && source.as_ref().is_none_or(|label| label.len() <= 512)
+    {
+        return Some(source);
     }
-    authenticated
+    fail(
+        socket,
+        "unauthorized",
+        "valid v1 authentication is required as the first message",
+    )
+    .await;
+    None
 }
 
 async fn display_session(mut socket: WebSocket, mut state: AppState) {
-    if !authenticate(&mut socket, &state.token).await {
+    if authenticate(&mut socket, &state.token).await.is_none() {
         return;
     }
     let mut updates = state.display.subscribe();
@@ -217,15 +219,15 @@ async fn display_session(mut socket: WebSocket, mut state: AppState) {
 }
 
 async fn session(mut socket: WebSocket, mut state: AppState) {
-    if !authenticate(&mut socket, &state.token).await {
+    let Some(source) = authenticate(&mut socket, &state.token).await else {
         return;
-    }
+    };
     let Ok(inference) = Arc::clone(&state.inference).try_acquire_owned() else {
         fail(&mut socket, "busy", "one live session is already active").await;
         return;
     };
     let (input_tx, input_rx) = mpsc::channel(worker::AUDIO_QUEUE_CAPACITY);
-    let display = state.display.start();
+    let display = state.display.start(source);
     let (output_tx, mut output_rx) = mpsc::channel(worker::EVENT_QUEUE_CAPACITY);
     let finish = Arc::new(AtomicBool::new(false));
     let worker_finish = Arc::clone(&finish);
@@ -240,6 +242,7 @@ async fn session(mut socket: WebSocket, mut state: AppState) {
     });
     let mut input = Some(input_tx);
     let mut ready = false;
+    let mut last_progress = Instant::now();
     let mut idle_deadline = Instant::now() + Duration::from_secs(30);
     loop {
         tokio::select! {
@@ -274,10 +277,15 @@ async fn session(mut socket: WebSocket, mut state: AppState) {
                                 break;
                             }
                         };
+                        let samples = chunk.end_sample();
                         let audio = QueuedAudio { chunk, received: std::time::Instant::now() };
                         if input.as_ref().expect("input enabled").try_send(audio).is_err() {
                             fail(&mut socket, "overloaded", "audio queue is full or closed; restart the session").await;
                             break;
+                        }
+                        if last_progress.elapsed() >= Duration::from_secs(1) {
+                            display.progress(samples);
+                            last_progress = Instant::now();
                         }
                     }
                     Message::Text(text) => {

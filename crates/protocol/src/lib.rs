@@ -17,7 +17,13 @@ pub const MAX_FRAME_BYTES: usize = HEADER_BYTES + MAX_CHUNK_SAMPLES * 2;
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ClientMessage {
-    Authenticate { version: u8, token: String },
+    Authenticate {
+        version: u8,
+        token: String,
+        /// Optional capture label, such as a browser tab title.
+        #[serde(default)]
+        source: Option<String>,
+    },
     Finish,
 }
 

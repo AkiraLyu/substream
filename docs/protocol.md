@@ -12,13 +12,15 @@
 {"type":"authenticate","version":1,"token":"<64 位十六进制令牌>"}
 ```
 
+认证消息可附带 `source` 字符串，最多 512 字节，用于显示捕获来源。浏览器扩展传入标签页标题；它只作为纯文本标签，不作为设备或权限依据。
+
 认证成功后，服务加载识别模型。准备完成时发送：
 
 ```json
-{"type":"ready","version":1,"backend":{"name":"…","synthetic":false,"languages":["ja"]}}
+{"type":"ready","version":1,"backend":{"name":"…","model":"/models/encoder.onnx","threads":2,"languages":["ja"]}}
 ```
 
-`synthetic` 为 `true` 表示示例字幕，不是真实识别结果。`languages` 是模型支持的语言，空数组表示未指定。
+`name` 是识别引擎名称，`model` 是已加载的编码器文件路径，`threads` 是实际推理线程数，`languages` 是模型配置声明的语言。
 
 客户端收到 `ready` 后才能发送音频。发送完毕后，用 `{"type":"finish"}` 请求结束。服务处理完已接收的音频，输出剩余字幕，再发送 `finished` 并关闭连接。
 
@@ -93,7 +95,7 @@ Rust 和 TypeScript 共用 [二进制样本](../fixtures/audio-v1.bin) 检查兼
 | `worker_stopped` | 识别任务提前退出 |
 | `timeout` | 初始化、等待输入或结束处理超时 |
 
-服务限制音频缓冲量，处理不及时会结束会话。目前无输入的等待时间上限为 30 秒，也用于限制初始化和结束处理；单次网络发送最多等待 3 秒。客户端应按实时速度发送音频，并持续接收字幕。识别失败时不会自动切换到示例模式。
+服务限制音频缓冲量，处理不及时会结束会话。目前无输入的等待时间上限为 30 秒，也用于限制初始化和结束处理；单次网络发送最多等待 3 秒。客户端应按实时速度发送音频，并持续接收字幕。
 
 ## 桌面字幕订阅
 
@@ -107,7 +109,9 @@ Rust 和 TypeScript 共用 [二进制样本](../fixtures/audio-v1.bin) 检查兼
   "version": 1,
   "session_id": 1,
   "status": "listening",
-  "backend": {"name": "sherpa-onnx", "synthetic": false, "languages": ["zh"]},
+  "backend": {"name": "sherpa-onnx", "model": "/models/encoder.onnx", "threads": 2, "languages": ["zh"]},
+  "source": "浏览器标签页标题",
+  "samples_received": 6400,
   "caption": {
     "segment_id": 0, "revision": 2,
     "start_ms": 0, "end_ms": 400,
@@ -119,8 +123,10 @@ Rust 和 TypeScript 共用 [二进制样本](../fixtures/audio-v1.bin) 检查兼
 ```
 
 - `session_id` 区分当前服务进程内的识别会话。开始新会话时递增；服务重启后从头计数，客户端重连时应丢弃本地旧状态。
-- `status` 为 `idle`、`loading`、`listening`、`finished` 或 `error`，分别表示空闲、加载模型、识别中、正常结束和识别错误。
-- `backend` 与音频接口含义相同，模型就绪前可为 `null`。显示端应明确标记 `synthetic: true` 的示例字幕。
+- `status` 为 `idle`、`loading`、`listening`、`finished` 或 `error`，分别表示空闲、加载模型、模型已就绪、正常结束和识别错误。`listening` 不代表已有音频到达。
+- `backend` 与音频接口含义相同，模型就绪前可为 `null`。结束状态中的模型信息表示该会话曾使用的模型。
+- `source` 是客户端提供的捕获来源，未提供时为 `null`。
+- `samples_received` 是已接收的采样数，每秒更新一次，正常结束时更新为实际处理总数；除以 16000 得到音频秒数。
 - `caption` 是最新一段字幕，没有字幕时为 `null`。正常结束后保留末尾字幕；取消或开始新会话时清空。
 - `caption_age_ms` 是字幕更新到本次发送之间的毫秒数，没有字幕时为 `null`。显示端用它计算剩余显示时间，避免重连后重新显示已过期的字幕。
 - `message` 在识别错误时给出原因，其他状态为 `null`。

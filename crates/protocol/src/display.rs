@@ -24,6 +24,8 @@ pub struct DisplayState {
     pub session_id: u64,
     pub status: DisplayStatus,
     pub backend: Option<BackendInfo>,
+    pub source: Option<String>,
+    pub samples_received: u64,
     pub caption: Option<CaptionUpdate>,
     /// Age of the caption at delivery, so reconnecting does not revive old text.
     pub caption_age_ms: Option<u64>,
@@ -37,6 +39,8 @@ impl Default for DisplayState {
             session_id: 0,
             status: DisplayStatus::Idle,
             backend: None,
+            source: None,
+            samples_received: 0,
             caption: None,
             caption_age_ms: None,
             message: None,

@@ -9,6 +9,7 @@ use substream_core::{
 use thiserror::Error;
 
 pub mod display;
+pub mod video;
 
 pub const VERSION: u8 = 1;
 pub const HEADER_BYTES: usize = 24;

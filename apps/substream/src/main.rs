@@ -12,6 +12,7 @@ use substream::{
     auth::{Token, create_token},
     config::RecognizerConfig,
     server::{ServerConfig, serve},
+    video::{VideoConfig, new_job_id, run_video},
 };
 use substream_backends::{
     batch::{BatchRecognizer, Ffmpeg, WhisperCpp},
@@ -19,7 +20,10 @@ use substream_backends::{
     process::Cancellation,
 };
 use substream_core::{pipeline::LivePipeline, subtitle, transcript::Transcript};
-use substream_protocol::{ServerMessage, VERSION};
+use substream_protocol::{
+    ServerMessage, VERSION,
+    video::{VideoJob, VideoStage},
+};
 
 #[derive(Parser)]
 #[command(version, about = "Local speech recognition and subtitles")]
@@ -35,7 +39,7 @@ enum Command {
         #[command(flatten)]
         recognizer: Recognizer,
     },
-    /// Serve an authenticated binary WebSocket on loopback.
+    /// Serve authenticated live audio and video jobs on loopback.
     Serve {
         #[arg(long, default_value = "127.0.0.1:9743")]
         listen: SocketAddr,
@@ -44,8 +48,20 @@ enum Command {
         /// Exact browser extension origin; repeat for more than one extension.
         #[arg(long = "allow-origin")]
         origins: Vec<String>,
-        #[command(flatten)]
-        recognizer: Recognizer,
+        /// Streaming model configuration. Omit for a video-only service.
+        #[arg(long)]
+        config: Option<PathBuf>,
+        #[arg(long, value_parser = clap::value_parser!(i32).range(1..=64))]
+        threads: Option<i32>,
+        /// Enable complete video jobs using a local configuration.
+        #[arg(long)]
+        video_config: Option<PathBuf>,
+    },
+    /// Download one video and generate SRT, VTT, and a timestamped JSON document.
+    Video {
+        url: String,
+        #[arg(long)]
+        config: PathBuf,
     },
     /// Create a private 256-bit authentication token file without overwriting.
     Token {
@@ -123,16 +139,29 @@ async fn main() -> Result<()> {
             listen,
             token_file,
             origins,
-            recognizer,
+            config,
+            threads,
+            video_config,
         } => {
+            anyhow::ensure!(
+                config.is_some() || video_config.is_some(),
+                "serve requires --config or --video-config"
+            );
             serve(ServerConfig {
                 address: listen,
                 token: Token::read(&token_file)?,
                 allowed_origins: origins,
-                recognizer: recognizer.load()?.factory(),
+                recognizer: config
+                    .as_deref()
+                    .map(|path| {
+                        RecognizerConfig::load(path, threads).map(RecognizerConfig::factory)
+                    })
+                    .transpose()?,
+                video: video_config.as_deref().map(VideoConfig::load).transpose()?,
             })
             .await
         }
+        Command::Video { url, config } => video(VideoConfig::load(&config)?, url).await,
         Command::Transcribe {
             input,
             model,
@@ -252,4 +281,57 @@ fn write_transcript(transcript: &Transcript, output: Output) -> Result<()> {
         io::stdout().lock().write_all(contents.as_bytes())?;
     }
     Ok(())
+}
+
+async fn video(config: VideoConfig, url: String) -> Result<()> {
+    let cancellation = Cancellation::default();
+    let worker_token = cancellation.clone();
+    let worker = tokio::task::spawn_blocking(move || -> Result<()> {
+        let mut job = VideoJob {
+            id: new_job_id()?,
+            stage: VideoStage::Queued,
+            url: url.clone(),
+            result: None,
+            error: None,
+        };
+        let mut output = io::BufWriter::new(io::stdout().lock());
+        let mut emit = |job: &VideoJob| -> Result<()> {
+            serde_json::to_writer(&mut output, job)?;
+            writeln!(output)?;
+            output.flush()?;
+            Ok(())
+        };
+        emit(&job)?;
+        let result = run_video(&config, &url, &worker_token, |stage| {
+            job.stage = stage;
+            emit(&job)
+        });
+        match result {
+            Ok(result) => {
+                job.stage = VideoStage::Completed;
+                job.result = Some(result);
+            }
+            Err(error) => {
+                job.stage = if worker_token.is_cancelled() {
+                    VideoStage::Cancelled
+                } else {
+                    VideoStage::Failed
+                };
+                job.error = Some(format!("{error:#}"));
+                emit(&job)?;
+                return Err(error);
+            }
+        }
+        emit(&job)
+    });
+    let cancel_task = tokio::spawn(async move {
+        let mut terminate =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                .expect("SIGTERM handler");
+        tokio::select! { _ = tokio::signal::ctrl_c() => {}, _ = terminate.recv() => {} }
+        cancellation.cancel();
+    });
+    let result = worker.await.context("video worker panicked");
+    cancel_task.abort();
+    result?
 }

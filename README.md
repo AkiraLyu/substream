@@ -1,8 +1,8 @@
 # Substream
 
-Substream 是面向 Linux 的本地语音识别与字幕工具，支持系统音频和浏览器标签页的实时字幕，以及本地媒体文件的完整字幕导出。
+Substream 是面向 Linux 的本地语音识别与字幕工具，支持系统音频和浏览器标签页的实时字幕，以及本地文件、网页视频的完整字幕导出。
 
-实时识别使用 sherpa-onnx，文件识别使用 whisper.cpp。提供命令行、本地 WebSocket 服务、Chromium 扩展、桌面设置窗口和 KDE Wayland 悬浮字幕。GNOME 显示端、网页视频下载、翻译和总结尚未实现。
+实时识别使用 sherpa-onnx，文件识别使用 whisper.cpp，网页视频通过 yt-dlp 下载。提供命令行、本地服务、Chromium 扩展、桌面设置窗口和 KDE Wayland 悬浮字幕。GNOME 显示端、翻译和 AI 总结尚未实现。
 
 技术选择和模块职责见 [架构设计](docs/architecture.md)，客户端接入方式见 [本地协议](docs/protocol.md)。
 
@@ -67,7 +67,7 @@ cargo run -p substream --release --features sherpa -- serve \
 
 打开正在播放音频的标签页，点击扩展，将令牌文件内容填入弹窗后开始捕获。字幕显示在弹窗中；关闭弹窗后仍会继续捕获，重新打开即可停止。原音频会继续播放。桌面程序也可以启动服务并显示标签页字幕，选择“浏览器标签页”并填写扩展 ID 即可。
 
-令牌文件仅允许当前用户读写，扩展在浏览器会话期间保存令牌。模型加载完成后才开始采集。扩展只能捕获启动后实际播放的音频；生成整段字幕需要使用完整媒体文件。
+令牌文件仅允许当前用户读写，扩展在浏览器会话期间保存令牌。模型加载完成后才开始采集。扩展弹窗只能捕获启动后实际播放的音频；生成整段字幕可使用下述视频任务接口。
 
 ## 文件字幕
 
@@ -84,6 +84,36 @@ cargo run -p substream --release -- transcribe input.mp4 \
 
 字幕保留识别结果的段落时间，长文本按显示宽度换行，尚不支持按词调整时间或限制为两行。临时音频会在任务结束后删除；按 Ctrl+C 可取消任务，`--timeout-secs` 分别限制音频转换和识别的等待时间。
 
+## 网页视频字幕
+
+安装 [yt-dlp](https://github.com/yt-dlp/yt-dlp)、FFmpeg 和 whisper-cli，准备 whisper.cpp 的 GGML 模型。视频任务使用完整音轨识别，不需要启用 `sherpa`。
+
+复制 [视频配置](configs/video.example.toml)，填写模型、输出目录和浏览器名称后运行：
+
+```bash
+cargo run -p substream --release -- video 'https://example.com/video' \
+  --config configs/video.example.toml
+```
+
+`cookies_from_browser` 指定读取登录状态的浏览器，例如 `firefox`、`chromium` 或 `chrome+kwallet6`。需要指定资料目录时，使用 `firefox:/path/to/profile`。删除此配置项即可匿名下载。Cookie 由本机 yt-dlp 读取，不经过扩展或字幕接口；浏览器资料格式和密钥环支持见 [yt-dlp 参数说明](https://github.com/yt-dlp/yt-dlp#filesystem-options)。
+
+每个任务创建独立目录，保存下载的视频、`subtitles.srt`、`subtitles.vtt` 和 `document.json`。JSON 文档包含来源链接、标题、语言及字幕段落时间，可作为后续总结功能的输入。命令按行输出 JSON 任务状态，完成状态包含结果路径。重复下载不会覆盖已有结果。
+
+按 Ctrl+C 可取消任务。`timeout_secs` 分别限制下载、音频转换和识别时间；取消、超时或失败会结束子进程并删除本次任务的文件，成功后只删除临时音频。每次请求处理一个视频，纯播放列表链接只取第一项，不支持直播。
+
+在本地服务中启用视频任务：
+
+```bash
+cargo run -p substream --release -- serve \
+  --video-config configs/video.example.toml \
+  --token-file /tmp/substream.token \
+  --allow-origin 'chrome-extension://<extension-id>'
+```
+
+令牌需先用 `token` 命令创建。同时使用实时字幕时，再加上 `--config` 并以 `--features sherpa` 构建。桌面程序的浏览器模式也可以选择“视频任务配置”。
+
+服务提供提交、查询、取消和读取字幕文档的 [HTTP 接口](docs/protocol.md#视频任务)。扩展的 `video.ts` 和后台消息接口可直接调用这些功能；当前弹窗尚未提供视频下载按钮，也未接入 AI 模型。
+
 ## 开发
 
 ```bash
@@ -98,13 +128,13 @@ npm run build
 npm test
 ```
 
-默认测试不需要语音模型。安装 FFmpeg 和 Python 3 后，可在仓库根目录额外检查文件转换与字幕导出：
+默认测试不需要语音模型。安装 FFmpeg、yt-dlp 和 Python 3 后，可在仓库根目录额外检查文件转换及视频任务：
 
 ```bash
-cargo test -p substream --test offline -- --ignored
+cargo test -p substream --test offline --test video -- --ignored
 ```
 
-该测试使用真实 FFmpeg 和固定识别结果，验证音频转换、字幕内容及时间，不评估模型准确率。CI 单独构建 `sherpa` 功能以检查原生库链接。
+这些测试使用真实 FFmpeg、yt-dlp 和固定识别结果，验证完整音轨、字幕内容与时间。视频来自本地测试服务，Cookie 来自临时 Firefox 资料目录，不使用个人登录数据，也不评估模型准确率。CI 运行上述测试，并单独构建 `sherpa` 功能以检查原生库链接。
 
 测试应围绕音频完整性、字幕内容与时间、协议兼容和失败处理。优先通过公开接口检查结果，避免固定内部调用顺序、队列容量或字幕更新次数。
 
@@ -116,10 +146,10 @@ cargo test -p substream --test offline -- --ignored
 | --- | --- |
 | `crates/core` | 音频与字幕数据、识别接口、字幕更新和导出 |
 | `crates/protocol` | JSON 消息和二进制音频格式 |
-| `crates/backends` | 识别引擎、FFmpeg 和子进程管理 |
+| `crates/backends` | 识别引擎、FFmpeg、yt-dlp 和子进程管理 |
 | `apps/substream` | 命令行、配置、认证和本地服务 |
 | `apps/overlay` | 参数界面、设备发现、进程控制和 KDE 悬浮字幕 |
-| `browser/extension` | 标签页音频捕获与字幕预览 |
+| `browser/extension` | 标签页音频捕获、字幕预览和视频任务接口 |
 | `fixtures` | 协议和识别结果的共用样本 |
 
 接入识别引擎时，实现 `StreamingRecognizer` 或 `BatchRecognizer`，再在应用的配置入口注册。核心模块不依赖具体引擎或网络库。

@@ -45,7 +45,8 @@ impl TestServer {
                 address,
                 token: Token::read(&path).unwrap(),
                 allowed_origins: vec!["chrome-extension://test".into()],
-                recognizer: std::sync::Arc::new(|| Ok(Box::<Utterance>::default())),
+                recognizer: Some(std::sync::Arc::new(|| Ok(Box::<Utterance>::default()))),
+                video: None,
             },
             receiver,
         );

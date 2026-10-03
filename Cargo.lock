@@ -1333,6 +1333,7 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "toml",
+ "tower",
  "tracing",
  "tracing-subscriber",
 ]
@@ -1342,11 +1343,13 @@ name = "substream-backends"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "rustix",
  "serde",
  "serde_json",
  "sherpa-onnx",
  "substream-core",
  "tempfile",
+ "url",
 ]
 
 [[package]]

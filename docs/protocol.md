@@ -87,6 +87,7 @@ Rust 和 TypeScript 共用 [二进制样本](../fixtures/audio-v1.bin) 检查兼
 | --- | --- |
 | `unauthorized` | 首条消息无效、认证超时或令牌错误 |
 | `busy` | 已有实时识别会话 |
+| `stream_disabled` | 服务未配置实时识别模型 |
 | `not_ready` | 模型就绪前发送了音频或结束请求 |
 | `bad_audio` | 音频帧格式错误 |
 | `bad_control` | 控制消息无效 |
@@ -134,3 +135,68 @@ Rust 和 TypeScript 共用 [二进制样本](../fixtures/audio-v1.bin) 检查兼
 每条消息都是完整状态，中间更新可能合并，不能用此接口保存完整字幕历史。显示端应替换旧状态，空闲或断开时清空画面。字幕隐藏时间由显示端决定。
 
 订阅连接可以保持空闲。发送音频或控制消息会收到 `read_only` 错误并断开；关闭订阅不会停止识别。接口仅包含通用 JSON 数据，不依赖 KDE、Qt 或 GNOME 类型。
+
+## 视频任务
+
+服务通过 `--video-config` 启用完整视频任务。接口使用 HTTP JSON，与实时音频和桌面字幕订阅独立。请求需带 `Authorization: Bearer <令牌>`；带有 `Origin` 时还需匹配同一份来源白名单。服务允许已授权来源发送 CORS 预检请求。
+
+| 方法与路径 | 功能 |
+| --- | --- |
+| `POST /v1/video/jobs` | 提交 `{"url":"https://example.com/video"}`，返回 `202` 和任务状态 |
+| `GET /v1/video/jobs/{id}` | 返回当前任务状态 |
+| `DELETE /v1/video/jobs/{id}` | 请求取消，返回当前状态；不删除已完成的结果 |
+| `GET /v1/video/jobs/{id}/document` | 完成后返回字幕文档，尚未完成时返回 `409` |
+
+任务状态示例：
+
+```json
+{
+  "id": "0123456789abcdef0123456789abcdef",
+  "stage": "completed",
+  "url": "https://example.com/video",
+  "result": {
+    "directory": "/output/video-abc123",
+    "video": "/output/video-abc123/media.mkv",
+    "srt": "/output/video-abc123/subtitles.srt",
+    "vtt": "/output/video-abc123/subtitles.vtt",
+    "document": "/output/video-abc123/document.json"
+  },
+  "error": null
+}
+```
+
+`stage` 可为 `queued`、`downloading`、`converting`、`transcribing`、`cancelling`、`completed`、`cancelled` 或 `failed`。客户端应按阶段显示状态，不能据此推算完成百分比。仅 `completed` 带有 `result`；失败或取消的原因在 `error` 中。
+
+结果路径属于运行服务的本机，视频扩展名由实际下载格式决定。扩展获取字幕内容时应使用 `/document`，不直接读取文件路径。文档格式如下：
+
+```json
+{
+  "schema_version": 1,
+  "source": {"url": "https://example.com/video", "id": "video-id", "title": "视频标题"},
+  "transcript": {
+    "schema_version": 1,
+    "source": "https://example.com/video",
+    "language": "zh",
+    "segments": [{"id": 0, "start_ms": 0, "end_ms": 1500, "text": "字幕内容"}]
+  }
+}
+```
+
+时间以下载视频的音轨起点为零，与浏览器的播放进度无关。文档可作为翻译、总结等功能的输入，当前服务不调用 AI 总结模型。
+
+服务同一时间只接受一个视频任务，忙时返回 `409 video_busy`。取消为异步操作，应继续查询到 `cancelled`；如果结果已保存，则可能返回 `completed`。关闭页面或断开请求不会取消任务，停止服务会取消未完成的任务。
+
+任务记录只保留当前服务进程内最近的 32 项。重启或记录被移除后，查询返回 `404 job_not_found`，已完成的文件不受影响。未启用视频配置返回 `503 video_disabled`，令牌错误返回 `401 unauthorized`，来源不匹配返回 `403 forbidden_origin`，无效链接返回 `400 invalid_url`。任务错误响应包含 `code` 和 `message`。
+
+扩展中的 `video.ts` 导出 `submitVideo`、`getVideoJob`、`cancelVideoJob` 和 `getVideoDocument`。扩展页面也可以使用后台消息接口：
+
+```typescript
+const response = await chrome.runtime.sendMessage({
+  target: "background",
+  type: "video",
+  token,
+  action: { kind: "submit", url: videoUrl },
+});
+```
+
+其他操作的 `action` 为 `{kind: "status" | "cancel" | "document", id}`。成功返回 `{ok: true, data}`，失败返回 `{ok: false, error}`。后台只接收本扩展的消息，普通网页不能直接调用此接口。

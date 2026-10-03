@@ -47,6 +47,7 @@ private:
     QLineEdit* m_program;
     QLineEdit* m_extension;
     QLineEdit* m_token;
+    QLineEdit* m_videoConfig;
     QSpinBox* m_threads;
     QSpinBox* m_font;
     QSpinBox* m_width;

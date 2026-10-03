@@ -9,6 +9,6 @@
   "background": { "service_worker": "background.js", "type": "module" },
   "action": { "default_popup": "popup.html" },
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src ws://127.0.0.1:9743"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src ws://127.0.0.1:9743 http://127.0.0.1:9743"
   }
 }

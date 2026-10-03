@@ -130,8 +130,10 @@ QString SessionController::deviceSerial() const
 
 QStringList SessionController::recognizerArguments() const
 {
-    QStringList args { QStringLiteral("--config"), m_options.config };
-    if (m_options.threads > 0)
+    QStringList args;
+    if (!m_options.config.isEmpty())
+        args << QStringLiteral("--config") << m_options.config;
+    if (!m_options.config.isEmpty() && m_options.threads > 0)
         args << QStringLiteral("--threads") << QString::number(m_options.threads);
     return args;
 }
@@ -157,7 +159,9 @@ void SessionController::start(const LaunchOptions& options)
         m_status = QStringLiteral("无法启动");
         emit changed();
     };
-    if (options.program.isEmpty() || !QFileInfo(options.config).isFile()) {
+    const bool videoOnly = options.input == LaunchOptions::Input::Browser
+        && options.config.isEmpty() && !options.videoConfig.isEmpty();
+    if (options.program.isEmpty() || (!videoOnly && !QFileInfo(options.config).isFile())) {
         reject(QStringLiteral("请选择识别程序和有效的模型配置文件。"));
         return;
     }
@@ -166,6 +170,10 @@ void SessionController::start(const LaunchOptions& options)
         return;
     }
     if (options.input == LaunchOptions::Input::Browser) {
+        if (!options.videoConfig.isEmpty() && !QFileInfo(options.videoConfig).isFile()) {
+            reject(QStringLiteral("请选择有效的视频任务配置文件。"));
+            return;
+        }
         static const QRegularExpression origin(QStringLiteral("^chrome-extension://[a-p]{32}$"));
         if (!origin.match(options.browserOrigin).hasMatch()) {
             reject(QStringLiteral("请输入 Chromium 扩展的 32 位 ID。"));
@@ -221,6 +229,8 @@ void SessionController::launchEngine()
         args.prepend(QStringLiteral("serve"));
         args << "--token-file" << m_options.tokenFile << "--allow-origin"
              << m_options.browserOrigin;
+        if (!m_options.videoConfig.isEmpty())
+            args << "--video-config" << m_options.videoConfig;
     }
     m_engine.start(m_options.program, args);
 }

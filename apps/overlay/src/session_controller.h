@@ -20,6 +20,7 @@ struct LaunchOptions {
     AudioDevice device;
     QString tokenFile;
     QString browserOrigin;
+    QString videoConfig;
 };
 
 // Owns capture and recognition processes; the window only edits options and renders state.

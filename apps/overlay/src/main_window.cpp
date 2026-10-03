@@ -133,6 +133,9 @@ MainWindow::MainWindow(bool kdeWayland)
     m_token = new QLineEdit(saved.value("tokenFile", tokenPath).toString());
     browserLayout->addWidget(label(QStringLiteral("配对令牌文件")));
     browserLayout->addWidget(filePicker(m_token, QStringLiteral("所有文件 (*)"), true));
+    m_videoConfig = new QLineEdit(saved.value("videoConfig").toString());
+    browserLayout->addWidget(label(QStringLiteral("视频任务配置（可选）")));
+    browserLayout->addWidget(filePicker(m_videoConfig, QStringLiteral("视频配置 (*.toml)")));
     auto* copy = new QPushButton(QStringLiteral("复制配对令牌"));
     captureLayout->addWidget(browserFields);
     captureLayout->addStretch();
@@ -356,6 +359,7 @@ void MainWindow::start()
     options.config = m_config->text().trimmed();
     options.threads = m_threads->value();
     options.tokenFile = m_token->text().trimmed();
+    options.videoConfig = m_videoConfig->text().trimmed();
     options.browserOrigin = "chrome-extension://" + m_extension->text().trimmed();
     for (const auto& device : m_devices.devices()) {
         if (device.name == m_device->currentData().toString())
@@ -422,6 +426,7 @@ void MainWindow::saveSettings()
     saved.setValue("threads", m_threads->value());
     saved.setValue("extension", m_extension->text());
     saved.setValue("tokenFile", m_token->text());
+    saved.setValue("videoConfig", m_videoConfig->text());
     saved.setValue("overlay", m_showOverlay->isChecked());
     saved.setValue("screen", m_screen->currentData());
     saved.setValue("font", m_font->value());

@@ -1,13 +1,15 @@
-export {};
+import { handleVideoAction } from "./video.ts";
+import type { VideoAction } from "./video.ts";
 
 type Request =
+  | { target: "background"; type: "video"; token: string; action: VideoAction }
   | { target: "background"; type: "start"; token: string; tabId: number }
   | { target: "background"; type: "stop" }
   | { target: "background"; type: "event"; event: Record<string, unknown> };
 
 let starting = false;
 
-async function handle(message: Request): Promise<void> {
+async function handle(message: Exclude<Request, { type: "video" }>): Promise<void> {
   if (message.type === "event") {
     const key = message.event.type === "caption" ? "lastCaption" : "statusEvent";
     await chrome.storage.session.set({ [key]: message.event });
@@ -81,8 +83,10 @@ async function handle(message: Request): Promise<void> {
 
 chrome.runtime.onMessage.addListener((message: Request, sender, respond) => {
   if (sender.id !== chrome.runtime.id || message.target !== "background") return false;
-  void handle(message)
-    .then(() => respond({ ok: true }))
+  const operation =
+    message.type === "video" ? handleVideoAction(message.token, message.action) : handle(message);
+  void operation
+    .then((data) => respond({ ok: true, data }))
     .catch((error: unknown) => {
       const text = error instanceof Error ? error.message : String(error);
       respond({ ok: false, error: text });

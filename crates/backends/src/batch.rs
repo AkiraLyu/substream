@@ -1,6 +1,7 @@
 use std::{
     fs::File,
     io::Read,
+    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::Command,
     time::Duration,
@@ -81,7 +82,10 @@ impl BatchRecognizer for WhisperCpp {
             !self.language.is_empty(),
             "language must be a language code or auto"
         );
-        let directory = tempfile::tempdir().context("create Whisper output directory")?;
+        let directory = tempfile::Builder::new()
+            .permissions(std::fs::Permissions::from_mode(0o700))
+            .tempdir()
+            .context("create Whisper output directory")?;
         let prefix = directory.path().join("transcript");
         let mut command = Command::new(&self.executable);
         command

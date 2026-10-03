@@ -2,6 +2,7 @@
 
 use std::{
     io::{Read, Seek, SeekFrom},
+    os::unix::process::CommandExt,
     process::{Child, Command, Stdio},
     sync::{
         Arc,
@@ -30,6 +31,9 @@ struct ChildGuard(Child);
 impl Drop for ChildGuard {
     fn drop(&mut self) {
         // Always reap, including timeout, cancellation, and early-return paths.
+        if let Some(pid) = rustix::process::Pid::from_raw(self.0.id() as i32) {
+            let _ = rustix::process::kill_process_group(pid, rustix::process::Signal::KILL);
+        }
         let _ = self.0.kill();
         let _ = self.0.wait();
     }
@@ -40,6 +44,7 @@ pub fn run(command: &mut Command, timeout: Duration, cancellation: &Cancellation
     let mut stderr = tempfile::tempfile().context("create process log")?;
     let program = command.get_program().to_string_lossy().into_owned();
     command
+        .process_group(0)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(stderr.try_clone()?);
@@ -93,5 +98,28 @@ mod tests {
         assert!(started.elapsed() < Duration::from_secs(2));
         token.cancel();
         assert!(run(&mut Command::new("true"), Duration::from_secs(1), &token).is_err());
+    }
+
+    #[test]
+    fn timeout_stops_descendants_as_well_as_the_downloader() {
+        let directory = tempfile::tempdir().unwrap();
+        let marker = directory.path().join("still-running");
+        let mut command = Command::new("sh");
+        command
+            .args(["-c", "(sleep 0.3; touch \"$1\") & wait", "downloader"])
+            .arg(&marker);
+        assert!(
+            run(
+                &mut command,
+                Duration::from_millis(100),
+                &Cancellation::default()
+            )
+            .is_err()
+        );
+        thread::sleep(Duration::from_millis(500));
+        assert!(
+            !marker.exists(),
+            "a child process continued after the job timed out"
+        );
     }
 }

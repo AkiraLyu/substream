@@ -1,6 +1,7 @@
 //! Device and inference adapters. Native dependencies are opt-in.
 
 pub mod batch;
+pub mod download;
 pub mod pcm;
 pub mod process;
 #[cfg(feature = "sherpa")]

@@ -37,7 +37,7 @@ use crate::{
 struct AppState {
     token: Token,
     allowed_origins: Vec<String>,
-    recognizer: RecognizerFactory,
+    recognizer: Option<RecognizerFactory>,
     connections: Arc<Semaphore>,
     inference: Arc<Semaphore>,
     display_connections: Arc<Semaphore>,
@@ -49,7 +49,8 @@ pub struct ServerConfig {
     pub address: SocketAddr,
     pub token: Token,
     pub allowed_origins: Vec<String>,
-    pub recognizer: RecognizerFactory,
+    pub recognizer: Option<RecognizerFactory>,
+    pub video: Option<crate::video::VideoConfig>,
 }
 
 pub async fn serve(config: ServerConfig) -> Result<()> {
@@ -65,7 +66,10 @@ pub async fn serve(config: ServerConfig) -> Result<()> {
     let router = router(config, shutdown_rx);
     axum::serve(listener, router)
         .with_graceful_shutdown(async move {
-            let _ = tokio::signal::ctrl_c().await;
+            let mut terminate =
+                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                    .expect("SIGTERM handler");
+            tokio::select! { _ = tokio::signal::ctrl_c() => {}, _ = terminate.recv() => {} }
             let _ = shutdown_tx.send(true);
         })
         .await
@@ -74,6 +78,12 @@ pub async fn serve(config: ServerConfig) -> Result<()> {
 
 /// Exposed for transport integration tests and embedding in another host.
 pub fn router(config: ServerConfig, shutdown: watch::Receiver<bool>) -> Router {
+    let video_routes = crate::video_jobs::router(
+        config.video,
+        config.token.clone(),
+        config.allowed_origins.clone(),
+        shutdown.clone(),
+    );
     let state = AppState {
         token: config.token,
         allowed_origins: config.allowed_origins,
@@ -89,6 +99,7 @@ pub fn router(config: ServerConfig, shutdown: watch::Receiver<bool>) -> Router {
         .route("/v1/stream", get(upgrade))
         .route("/v1/display", get(upgrade_display))
         .with_state(state)
+        .merge(video_routes)
 }
 
 async fn upgrade(
@@ -222,6 +233,15 @@ async fn session(mut socket: WebSocket, mut state: AppState) {
     let Some(source) = authenticate(&mut socket, &state.token).await else {
         return;
     };
+    let Some(recognizer) = state.recognizer.clone() else {
+        fail(
+            &mut socket,
+            "stream_disabled",
+            "configure a streaming model with --config",
+        )
+        .await;
+        return;
+    };
     let Ok(inference) = Arc::clone(&state.inference).try_acquire_owned() else {
         fail(&mut socket, "busy", "one live session is already active").await;
         return;
@@ -232,13 +252,7 @@ async fn session(mut socket: WebSocket, mut state: AppState) {
     let finish = Arc::new(AtomicBool::new(false));
     let worker_finish = Arc::clone(&finish);
     tokio::task::spawn_blocking(move || {
-        worker::run(
-            state.recognizer,
-            input_rx,
-            output_tx,
-            worker_finish,
-            inference,
-        )
+        worker::run(recognizer, input_rx, output_tx, worker_finish, inference)
     });
     let mut input = Some(input_tx);
     let mut ready = false;

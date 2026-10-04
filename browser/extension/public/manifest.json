@@ -1,9 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Substream — Live Captions",
+  "name": "__MSG_extensionName__",
+  "default_locale": "en",
   "version": "0.1.0",
   "minimum_chrome_version": "116",
-  "description": "Send tab audio to your local Substream speech engine.",
+  "description": "__MSG_extensionDescription__",
   "permissions": ["activeTab", "tabCapture", "offscreen", "storage"],
   "host_permissions": ["http://127.0.0.1:9743/*"],
   "background": { "service_worker": "background.js", "type": "module" },

@@ -1,3 +1,4 @@
+import { message } from "./i18n.ts";
 import { encodeAudio, MAX_BUFFERED_BYTES, SAMPLE_RATE } from "./protocol.ts";
 import type { ServerEvent } from "./protocol.ts";
 
@@ -24,23 +25,23 @@ class Capture {
       const socket = new WebSocket("ws://127.0.0.1:9743/v1/stream");
       this.socket = socket;
       await new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("本地服务连接或模型加载超时")), 30_000);
+        const timer = setTimeout(() => reject(new Error(message("connectionTimeout"))), 30_000);
         socket.onopen = () =>
           socket.send(JSON.stringify({ type: "authenticate", version: 1, token, source }));
         socket.onerror = () => {
           clearTimeout(timer);
-          reject(new Error("无法连接本地 Substream 服务"));
+          reject(new Error(message("cannotConnect")));
         };
         socket.onclose = () => {
           clearTimeout(timer);
-          reject(new Error("本地服务已断开"));
-          if (!this.disposed) this.fail("本地服务已断开，请重新开始字幕");
+          reject(new Error(message("serviceDisconnected")));
+          if (!this.disposed) this.fail(message("restartAfterDisconnect"));
         };
         socket.onmessage = ({ data }: MessageEvent<string>) => {
           try {
             const event = JSON.parse(data) as ServerEvent;
             if (event.type === "ready") {
-              if (event.version !== 1) throw new Error("Unsupported daemon protocol");
+              if (event.version !== 1) throw new Error(message("unsupportedProtocol"));
               clearTimeout(timer);
               this.ready = event;
               resolve();
@@ -55,11 +56,11 @@ class Capture {
           } catch (error) {
             clearTimeout(timer);
             reject(error);
-            this.fail("本地服务返回了无效消息");
+            this.fail(message("invalidMessage"));
           }
         };
       });
-      if (this.disposed) throw new Error("Capture was cancelled");
+      if (this.disposed) throw new Error(message("cancelled"));
     } catch (error) {
       this.dispose();
       throw error;
@@ -70,7 +71,7 @@ class Capture {
     try {
       const socket = this.socket;
       if (this.disposed || !this.ready || socket?.readyState !== WebSocket.OPEN) {
-        throw new Error("The daemon is not ready");
+        throw new Error(message("notReady"));
       }
       const media = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -81,27 +82,27 @@ class Capture {
       this.media = media;
       if (this.disposed) {
         media.getTracks().forEach((track) => track.stop());
-        throw new Error("Capture was cancelled");
+        throw new Error(message("cancelled"));
       }
       this.monitorContext = new AudioContext();
       this.monitorContext.createMediaStreamSource(media).connect(this.monitorContext.destination);
       // Browser resampling includes anti-aliasing. Do not decimate by discarding samples.
       this.captureContext = new AudioContext({ sampleRate: SAMPLE_RATE });
       if (this.captureContext.sampleRate !== SAMPLE_RATE)
-        throw new Error("16 kHz AudioContext is unavailable");
+        throw new Error(message("sampleRateUnavailable"));
       await this.captureContext.audioWorklet.addModule("pcm-worklet.js");
-      if (this.disposed) throw new Error("Capture was cancelled");
+      if (this.disposed) throw new Error(message("cancelled"));
       this.worklet = new AudioWorkletNode(this.captureContext, "substream-pcm");
       this.worklet.port.onmessage = ({ data }) => {
         if (data.type === "pcm") {
           if (socket.readyState !== WebSocket.OPEN) {
-            this.fail("音频连接已断开");
+            this.fail(message("audioDisconnected"));
             return;
           }
           const pcm = new Int16Array(data.buffer as ArrayBuffer);
           const frame = encodeAudio(pcm, this.sequence, this.sample);
           if (socket.bufferedAmount + frame.byteLength > MAX_BUFFERED_BYTES) {
-            this.fail("音频发送积压，请重新开始字幕");
+            this.fail(message("audioBacklog"));
             return;
           }
           socket.send(frame);
@@ -111,10 +112,10 @@ class Capture {
         } else if (data.type === "flushed") {
           this.flushed?.();
         } else if (data.type === "overloaded") {
-          this.fail("浏览器音频队列已满，请重新开始字幕");
+          this.fail(message("queueFull"));
         }
       };
-      this.worklet.onprocessorerror = () => this.fail("音频处理器停止运行");
+      this.worklet.onprocessorerror = () => this.fail(message("processorStopped"));
       const source = this.captureContext.createMediaStreamSource(media);
       source.connect(this.worklet);
       this.worklet.connect(this.captureContext.destination); // worklet output is silent
@@ -123,7 +124,7 @@ class Capture {
           void this.stop().catch((error: unknown) => this.fail(String(error)));
         };
       await Promise.all([this.captureContext.resume(), this.monitorContext.resume()]);
-      if (this.disposed) throw new Error("Capture was cancelled");
+      if (this.disposed) throw new Error(message("cancelled"));
       report(this.ready);
     } catch (error) {
       this.dispose();
@@ -140,9 +141,9 @@ class Capture {
     this.stopping = true;
     report({ type: "stopping" });
     try {
-      if (!this.worklet) throw new Error("音频尚未开始");
+      if (!this.worklet) throw new Error(message("audioNotStarted"));
       await new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("Audio flush timed out")), 1000);
+        const timer = setTimeout(() => reject(new Error(message("flushTimeout"))), 1000);
         this.flushed = () => {
           clearTimeout(timer);
           resolve();
@@ -152,7 +153,7 @@ class Capture {
       if (this.disposed || this.socket?.readyState !== WebSocket.OPEN) return;
       this.socket.send(JSON.stringify({ type: "finish" }));
       this.releaseAudio();
-      this.finishTimer = setTimeout(() => this.fail("字幕结束处理超时"), 30_000);
+      this.finishTimer = setTimeout(() => this.fail(message("finishTimeout")), 30_000);
     } catch (error) {
       this.fail(error instanceof Error ? error.message : String(error));
     }
@@ -190,29 +191,29 @@ class Capture {
 }
 
 let active: Capture | null = null;
-chrome.runtime.onMessage.addListener((message, sender, respond) => {
-  if (sender.id !== chrome.runtime.id || message.target !== "offscreen") return false;
+chrome.runtime.onMessage.addListener((request, sender, respond) => {
+  if (sender.id !== chrome.runtime.id || request.target !== "offscreen") return false;
   const run = async () => {
-    if (message.type === "stop") {
+    if (request.type === "stop") {
       await active?.stop();
       return;
     }
-    if (message.type === "cancel") {
+    if (request.type === "cancel") {
       active?.cancel();
       return;
     }
-    if (message.type === "prepare") {
-      if (active) throw new Error("Capture is already active");
+    if (request.type === "prepare") {
+      if (active) throw new Error(message("alreadyActive"));
       active = new Capture();
-      await active.connect(message.token as string, message.source as string);
+      await active.connect(request.token as string, request.source as string);
       return;
     }
-    if (message.type === "start") {
-      if (!active) throw new Error("The daemon has not been prepared");
-      await active.startAudio(message.streamId as string);
+    if (request.type === "start") {
+      if (!active) throw new Error(message("notPrepared"));
+      await active.startAudio(request.streamId as string);
       return;
     }
-    throw new Error("Unknown capture command");
+    throw new Error(message("unknownCommand"));
   };
   void run()
     .then(() => respond({ ok: true }))

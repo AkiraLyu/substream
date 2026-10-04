@@ -8,7 +8,7 @@ Substream 是面向 Linux 的本地语音识别与字幕工具，支持系统音
 
 ## 桌面程序
 
-需要 Linux、Rust 1.88+、C++20 编译器、CMake、Qt 6 的 Widgets、Quick、WebSockets 模块和 LayerShellQt。系统音频采集需要 PipeWire 工具。
+需要 Linux、Rust 1.88+、C++20 编译器、CMake、Qt 6.7+ 的 Widgets、Quick、WebSockets、LinguistTools 模块和 LayerShellQt。系统音频采集需要 PipeWire 工具。
 
 ```bash
 cargo build -p substream --release --features sherpa
@@ -20,6 +20,8 @@ build/overlay/substream-overlay
 在“音频源”中选择输出设备或输入设备，在“模型”中选择准备好的模型配置文件，再点击“开始字幕”。窗口显示当前捕获源、实际加载的模型、支持的语言、线程数、音频时长和最新字幕。悬浮字幕可设置屏幕、字号、宽度、底部距离和隐藏时间。
 
 模型需单独准备，程序不附带模型。配置方法见下文，桌面操作、浏览器服务和安装方法见 [桌面字幕](docs/desktop.md)。
+
+桌面程序和浏览器扩展支持简体中文与英语，分别跟随系统和浏览器的界面语言，未支持的语言回退为英语。界面语言不影响语音识别和字幕内容。语言设置与翻译维护方法见 [界面语言](docs/i18n.md)。
 
 ## 实时识别
 

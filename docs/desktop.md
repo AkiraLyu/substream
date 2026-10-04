@@ -4,12 +4,12 @@
 
 ## 构建与安装
 
-需要 C++20 编译器、CMake 3.22+、Ninja、Qt 6.5+ 的 Widgets、Quick、WebSockets 模块，以及 LayerShellQt 6。KDE 悬浮字幕还需要 Qt Wayland；系统音频采集使用 PipeWire 的 `pw-dump` 和 `pw-cat`。
+需要 C++20 编译器、CMake 3.22+、Ninja、Qt 6.7+ 的 Widgets、Quick、WebSockets、LinguistTools 模块，以及 LayerShellQt 6。LinguistTools 用于编译翻译资源，Qt 的系统翻译包提供标准对话框文本。KDE 悬浮字幕还需要 Qt Wayland；系统音频采集使用 PipeWire 的 `pw-dump` 和 `pw-cat`。
 
 Arch Linux 可安装以下软件包：
 
 ```bash
-run0 pacman -S --needed base-devel cmake ninja qt6-base qt6-declarative qt6-websockets qt6-wayland layer-shell-qt pipewire-audio
+run0 pacman -S --needed base-devel cmake ninja qt6-base qt6-declarative qt6-websockets qt6-wayland qt6-tools qt6-translations layer-shell-qt pipewire-audio
 ```
 
 在仓库根目录构建并运行：

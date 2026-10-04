@@ -23,7 +23,7 @@ bool KdeWindow::initialize(QString* error)
         }
     }
     if (!selected) {
-        *error = QStringLiteral("Display not found; use --list-screens to see available displays");
+        *error = tr("Display not found; use --list-screens to see available displays");
         return false;
     }
     setTitle(QStringLiteral("Substream"));
@@ -41,7 +41,7 @@ bool KdeWindow::initialize(QString* error)
     setResizeMode(QQuickView::SizeRootObjectToView);
     setSource(QUrl(QStringLiteral("qrc:/qml/Overlay.qml")));
     if (status() != QQuickView::Ready) {
-        *error = QStringLiteral("Cannot load the subtitle view");
+        *error = tr("Cannot load the subtitle view");
         return false;
     }
     rootObject()->setProperty("fontSize", m_options.fontSize);
@@ -50,7 +50,8 @@ bool KdeWindow::initialize(QString* error)
     connect(selected, &QScreen::geometryChanged, this, [this] { fitScreen(); });
     connect(qGuiApp, &QGuiApplication::screenRemoved, this, [this, selected](QScreen* removed) {
         if (removed == selected) {
-            qWarning("Subtitle display disconnected; restart with an available display");
+            qWarning().noquote() << tr(
+                "Subtitle display disconnected. Restart with an available display.");
             close();
         }
     });

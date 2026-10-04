@@ -20,15 +20,15 @@ AudioDevices::AudioDevices(QObject* parent)
     connect(&m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
         if (error == QProcess::FailedToStart) {
             m_deadline.stop();
-            emit failed(
-                QStringLiteral("无法读取音频设备，请确认已安装 PipeWire 工具（pw-dump）。"));
+            emit failed(tr("Cannot list audio devices. Check that pw-dump is installed."));
         }
     });
     connect(&m_process, &QProcess::finished, this, [this](int code, QProcess::ExitStatus status) {
         m_deadline.stop();
         const auto document = QJsonDocument::fromJson(m_output);
         if (code != 0 || status != QProcess::NormalExit || !document.isArray()) {
-            emit failed(QStringLiteral("无法读取 PipeWire 设备，请检查音频服务是否运行。"));
+            emit failed(
+                tr("Cannot list PipeWire devices. Check that the audio service is running."));
             return;
         }
         m_devices.clear();
@@ -45,9 +45,8 @@ AudioDevices::AudioDevices(QObject* parent)
             device.name = props.value("node.name").toString();
             device.sink = kind == "Audio/Sink";
             const auto description = props.value("node.description").toString(device.name);
-            device.label
-                = (device.sink ? QStringLiteral("系统输出 · ") : QStringLiteral("音频输入 · "))
-                + description;
+            device.label = (device.sink ? tr("System output · %1") : tr("Audio input · %1"))
+                               .arg(description);
             if (!device.serial.isEmpty() && !device.name.isEmpty())
                 m_devices.append(device);
         }

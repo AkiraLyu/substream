@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Quick Widgets WebSockets)
+find_package(Qt6 6.7 REQUIRED COMPONENTS Core Gui Quick Widgets WebSockets LinguistTools)
 find_package(LayerShellQt 6.0 REQUIRED)
 
 add_library(caption-client STATIC
@@ -33,6 +33,7 @@ target_compile_options(desktop-session PRIVATE -Wall -Wextra -Wpedantic)
 qt_add_executable(substream-overlay
     src/main.cpp
     src/main_window.cpp src/main_window.h
+    src/translations.cpp src/translations.h
     src/kde_window.cpp
     src/kde_window.h
 )
@@ -42,6 +43,7 @@ target_compile_options(substream-overlay PRIVATE -Wall -Wextra -Wpedantic)
 install(TARGETS substream-overlay RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES substream-overlay.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 
+set(translation_targets substream-overlay)
 include(CTest)
 if(BUILD_TESTING)
     find_package(Qt6 REQUIRED COMPONENTS Test)
@@ -54,4 +56,16 @@ if(BUILD_TESTING)
     target_link_libraries(session-controller-test PRIVATE desktop-session Qt6::Test)
     add_dependencies(session-controller-test session-peer)
     add_test(NAME session-controller COMMAND session-controller-test)
+    qt_add_executable(translations-test tests/translations_test.cpp src/translations.cpp src/translations.h)
+    target_link_libraries(translations-test PRIVATE desktop-session Qt6::Test)
+    list(APPEND translation_targets translations-test)
+    add_test(NAME translations COMMAND translations-test)
 endif()
+
+qt_add_translations(
+    TARGETS ${translation_targets}
+    SOURCE_TARGETS substream-overlay caption-client desktop-session
+    TS_FILES i18n/substream_zh_CN.ts
+    PLURALS_TS_FILE i18n/substream_en.ts
+    LUPDATE_OPTIONS -no-obsolete
+)

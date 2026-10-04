@@ -1,3 +1,5 @@
+import { validateToken } from "./auth.ts";
+import { message } from "./i18n.ts";
 import { handleVideoAction } from "./video.ts";
 import type { VideoAction } from "./video.ts";
 
@@ -9,19 +11,19 @@ type Request =
 
 let starting = false;
 
-async function handle(message: Exclude<Request, { type: "video" }>): Promise<void> {
-  if (message.type === "event") {
-    const key = message.event.type === "caption" ? "lastCaption" : "statusEvent";
-    await chrome.storage.session.set({ [key]: message.event });
+async function handle(request: Exclude<Request, { type: "video" }>): Promise<void> {
+  if (request.type === "event") {
+    const key = request.event.type === "caption" ? "lastCaption" : "statusEvent";
+    await chrome.storage.session.set({ [key]: request.event });
     return;
   }
-  if (message.type === "stop") {
+  if (request.type === "stop") {
     const reply = await chrome.runtime.sendMessage({ target: "offscreen", type: "stop" });
-    if (!reply?.ok) throw new Error(reply?.error ?? "No capture is active");
+    if (!reply?.ok) throw new Error(reply?.error ?? message("noCapture"));
     return;
   }
-  if (starting) throw new Error("Capture is already starting");
-  if (!/^[a-fA-F0-9]{64}$/.test(message.token)) throw new Error("配对令牌需要 64 位十六进制字符");
+  if (starting) throw new Error(message("alreadyStarting"));
+  validateToken(request.token);
   starting = true;
   let attempted = false;
   let prepared = false;
@@ -29,10 +31,10 @@ async function handle(message: Exclude<Request, { type: "video" }>): Promise<voi
     const { statusEvent } = await chrome.storage.session.get("statusEvent");
     const status = statusEvent as { type?: string } | undefined;
     if (["ready", "starting", "stopping"].includes(status?.type ?? ""))
-      throw new Error("Capture is already active");
+      throw new Error(message("alreadyActive"));
     attempted = true;
     await chrome.storage.session.set({
-      token: message.token,
+      token: request.token,
       statusEvent: { type: "starting" },
       lastCaption: null,
     });
@@ -46,25 +48,25 @@ async function handle(message: Exclude<Request, { type: "video" }>): Promise<voi
         justification: "Capture user-selected tab audio for local live captions",
       });
     }
-    const tab = await chrome.tabs.get(message.tabId);
+    const tab = await chrome.tabs.get(request.tabId);
     // Stream IDs expire within seconds. Load the model before allocating an ID.
     const preparation = await chrome.runtime.sendMessage({
       target: "offscreen",
       type: "prepare",
-      token: message.token,
-      source: Array.from(tab.title ?? `标签页 ${message.tabId}`)
+      token: request.token,
+      source: Array.from(tab.title ?? message("tabTitle", String(request.tabId)))
         .slice(0, 120)
         .join(""),
     });
-    if (!preparation?.ok) throw new Error(preparation?.error ?? "Daemon preparation failed");
+    if (!preparation?.ok) throw new Error(preparation?.error ?? message("preparationFailed"));
     prepared = true;
-    const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: message.tabId });
+    const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: request.tabId });
     const reply = await chrome.runtime.sendMessage({
       target: "offscreen",
       type: "start",
       streamId,
     });
-    if (!reply?.ok) throw new Error(reply?.error ?? "Capture failed to start");
+    if (!reply?.ok) throw new Error(reply?.error ?? message("startFailed"));
   } catch (error) {
     if (prepared)
       await chrome.runtime.sendMessage({ target: "offscreen", type: "cancel" }).catch(() => {});
@@ -81,10 +83,10 @@ async function handle(message: Exclude<Request, { type: "video" }>): Promise<voi
   }
 }
 
-chrome.runtime.onMessage.addListener((message: Request, sender, respond) => {
-  if (sender.id !== chrome.runtime.id || message.target !== "background") return false;
+chrome.runtime.onMessage.addListener((request: Request, sender, respond) => {
+  if (sender.id !== chrome.runtime.id || request.target !== "background") return false;
   const operation =
-    message.type === "video" ? handleVideoAction(message.token, message.action) : handle(message);
+    request.type === "video" ? handleVideoAction(request.token, request.action) : handle(request);
   void operation
     .then((data) => respond({ ok: true, data }))
     .catch((error: unknown) => {

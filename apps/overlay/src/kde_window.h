@@ -13,6 +13,7 @@ struct OverlayOptions {
 
 // Only this class depends on KDE's window placement API.
 class KdeWindow final : public QQuickView {
+    Q_OBJECT
 public:
     KdeWindow(const OverlayOptions& options, CaptionModel& captions);
     bool initialize(QString* error);

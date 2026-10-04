@@ -30,7 +30,7 @@ bool CaptionModel::applyCaption(const QJsonObject& caption, qint64 ageMs, QStrin
     const auto revision = caption.value("revision").toInteger(-1);
     if (segment < 0 || revision < 1 || ageMs < 0 || !caption.value("stable_text").isString()
         || !caption.value("unstable_text").isString() || !caption.value("is_final").isBool()) {
-        *error = QStringLiteral("Invalid caption event");
+        *error = tr("Invalid caption event");
         return false;
     }
     if (segment < m_segment || (segment == m_segment && (revision <= m_revision || m_final))) {
@@ -54,7 +54,7 @@ bool CaptionModel::apply(const QJsonObject& event, QString* error)
     const auto type = event.value("type").toString();
     if (type == "display") {
         if (event.value("version").toInt() != 1 || event.value("session_id").toInteger(-1) < 0) {
-            *error = QStringLiteral("Unsupported display protocol");
+            *error = tr("Unsupported display protocol");
             return false;
         }
         const auto session = event.value("session_id").toInteger();
@@ -69,7 +69,7 @@ bool CaptionModel::apply(const QJsonObject& event, QString* error)
             return true;
         }
         if (status != "listening" && status != "finished") {
-            *error = QStringLiteral("Unknown display status");
+            *error = tr("Unknown display status");
             return false;
         }
         if (event.value("caption").isNull()) {
@@ -81,7 +81,7 @@ bool CaptionModel::apply(const QJsonObject& event, QString* error)
     }
     if (type == "ready") {
         if (event.value("version").toInt() != 1) {
-            *error = QStringLiteral("Unsupported stream protocol");
+            *error = tr("Unsupported stream protocol");
             return false;
         }
         reset();
@@ -95,9 +95,9 @@ bool CaptionModel::apply(const QJsonObject& event, QString* error)
     }
     if (type == "error") {
         reset();
-        *error = event.value("message").toString(QStringLiteral("Caption source failed"));
+        *error = event.value("message").toString(tr("Caption source failed"));
         return false;
     }
-    *error = QStringLiteral("Unknown caption event");
+    *error = tr("Unknown caption event");
     return false;
 }

@@ -63,7 +63,7 @@ private:
     QTimer m_captureDeadline;
     QTimer m_progress;
     QElapsedTimer m_lastAudio;
-    QString m_status = QStringLiteral("尚未启动");
+    QString m_status = tr("Not started");
     QString m_error;
     QString m_source;
     QString m_stderr;

@@ -1,0 +1,158 @@
+{
+  "language": {
+    "message": "zh-CN"
+  },
+  "extensionName": {
+    "message": "Substream — 实时字幕"
+  },
+  "extensionDescription": {
+    "message": "将标签页音频发送到本机 Substream 识别引擎。"
+  },
+  "liveCaptions": {
+    "message": "实时字幕"
+  },
+  "pairingToken": {
+    "message": "本地服务配对令牌"
+  },
+  "tokenLifetime": {
+    "message": "令牌仅保留到浏览器会话结束。"
+  },
+  "startCaptions": {
+    "message": "开始当前标签页字幕"
+  },
+  "stop": {
+    "message": "停止"
+  },
+  "disconnected": {
+    "message": "未连接"
+  },
+  "captureScope": {
+    "message": "捕获所选标签页正在播放的音频，不支持受保护的音频。"
+  },
+  "recognizing": {
+    "message": "正在识别 · $BACKEND$",
+    "placeholders": {
+      "backend": {
+        "content": "$1",
+        "example": "sherpa-onnx"
+      }
+    }
+  },
+  "starting": {
+    "message": "连接服务并加载模型…"
+  },
+  "stopping": {
+    "message": "正在保存最后一段字幕…"
+  },
+  "finished": {
+    "message": "字幕已停止"
+  },
+  "connectionFailed": {
+    "message": "连接失败"
+  },
+  "noTab": {
+    "message": "没有可捕获的标签页"
+  },
+  "startFailed": {
+    "message": "字幕启动失败"
+  },
+  "stopFailed": {
+    "message": "字幕停止失败"
+  },
+  "noCapture": {
+    "message": "当前没有音频采集"
+  },
+  "alreadyStarting": {
+    "message": "正在启动音频采集"
+  },
+  "alreadyActive": {
+    "message": "音频采集已启动"
+  },
+  "invalidToken": {
+    "message": "配对令牌需要 64 位十六进制字符"
+  },
+  "tabTitle": {
+    "message": "标签页 $ID$",
+    "placeholders": {
+      "id": {
+        "content": "$1",
+        "example": "12"
+      }
+    }
+  },
+  "preparationFailed": {
+    "message": "本地服务准备失败"
+  },
+  "connectionTimeout": {
+    "message": "本地服务连接或模型加载超时"
+  },
+  "cannotConnect": {
+    "message": "无法连接本地 Substream 服务"
+  },
+  "serviceDisconnected": {
+    "message": "本地服务已断开"
+  },
+  "restartAfterDisconnect": {
+    "message": "本地服务已断开，请重新开始字幕"
+  },
+  "unsupportedProtocol": {
+    "message": "不支持此本地服务协议"
+  },
+  "invalidMessage": {
+    "message": "本地服务返回了无效消息"
+  },
+  "cancelled": {
+    "message": "音频采集已取消"
+  },
+  "notReady": {
+    "message": "本地服务尚未就绪"
+  },
+  "sampleRateUnavailable": {
+    "message": "无法以 16 kHz 采集音频"
+  },
+  "audioDisconnected": {
+    "message": "音频连接已断开"
+  },
+  "audioBacklog": {
+    "message": "音频发送积压，请重新开始字幕"
+  },
+  "queueFull": {
+    "message": "浏览器音频队列已满，请重新开始字幕"
+  },
+  "processorStopped": {
+    "message": "音频处理器停止运行"
+  },
+  "audioNotStarted": {
+    "message": "音频尚未开始"
+  },
+  "flushTimeout": {
+    "message": "保存剩余音频超时"
+  },
+  "finishTimeout": {
+    "message": "字幕结束处理超时"
+  },
+  "notPrepared": {
+    "message": "本地服务尚未准备"
+  },
+  "unknownCommand": {
+    "message": "未知的音频采集命令"
+  },
+  "videoRequestFailed": {
+    "message": "视频任务请求失败（HTTP $STATUS$）",
+    "placeholders": {
+      "status": {
+        "content": "$1",
+        "example": "503"
+      }
+    }
+  },
+  "invalidJobId": {
+    "message": "无效的视频任务 ID"
+  },
+  "invalidVideoUrl": {
+    "message": "视频链接需要使用 HTTP 或 HTTPS"
+  },
+  "invalidVideoAction": {
+    "message": "无效的视频任务操作"
+  }
+}

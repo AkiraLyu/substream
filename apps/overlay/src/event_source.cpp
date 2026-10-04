@@ -39,7 +39,7 @@ bool EventSource::decode(const QByteArray& data)
     const auto document = QJsonDocument::fromJson(data, &error);
     if (error.error != QJsonParseError::NoError || !document.isObject()) {
         m_fatal = true;
-        emit failed(QStringLiteral("Invalid JSON caption message"));
+        emit failed(tr("Invalid JSON caption message"));
         return false;
     }
     emit eventReceived(document.object());
@@ -49,7 +49,7 @@ bool EventSource::decode(const QByteArray& data)
 bool EventSource::startStdin(QString* error)
 {
     if (isatty(STDIN_FILENO)) {
-        *error = QStringLiteral("Pipe caption events into --stdin or redirect an event file");
+        *error = tr("Pipe caption events into --stdin or redirect an event file");
         return false;
     }
     m_stdinFlags = fcntl(STDIN_FILENO, F_GETFL);
@@ -143,7 +143,7 @@ bool EventSource::feed(const QByteArray& data)
         m_buffer.remove(0, end + 1);
         if (end > MaxEventBytes) {
             m_fatal = true;
-            emit failed(QStringLiteral("Caption message is too large"));
+            emit failed(tr("Caption message is too large"));
             return false;
         }
         if (!line.trimmed().isEmpty() && !decode(line))
@@ -151,7 +151,7 @@ bool EventSource::feed(const QByteArray& data)
     }
     if (m_buffer.size() > MaxEventBytes) {
         m_fatal = true;
-        emit failed(QStringLiteral("Caption message is too large"));
+        emit failed(tr("Caption message is too large"));
         return false;
     }
     return true;

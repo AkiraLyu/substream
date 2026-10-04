@@ -51,14 +51,16 @@ QWidget* filePicker(QLineEdit* edit, const QString& filter, bool newFile = false
     auto* row = new QWidget;
     auto* layout = new QHBoxLayout(row);
     layout->setContentsMargins(0, 0, 0, 0);
-    auto* browse = new QPushButton(QStringLiteral("选择…"));
+    auto* browse = new QPushButton(QCoreApplication::translate("FilePicker", "Browse…"));
     layout->addWidget(edit, 1);
     layout->addWidget(browse);
     QObject::connect(browse, &QPushButton::clicked, row, [edit, filter, newFile, row] {
         const auto path = newFile
-            ? QFileDialog::getSaveFileName(row, QStringLiteral("选择令牌位置"), edit->text(),
-                  filter, nullptr, QFileDialog::DontConfirmOverwrite)
-            : QFileDialog::getOpenFileName(row, QStringLiteral("选择文件"), edit->text(), filter);
+            ? QFileDialog::getSaveFileName(row,
+                  QCoreApplication::translate("FilePicker", "Choose a token file location"),
+                  edit->text(), filter, nullptr, QFileDialog::DontConfirmOverwrite)
+            : QFileDialog::getOpenFileName(row,
+                  QCoreApplication::translate("FilePicker", "Choose a file"), edit->text(), filter);
         if (!path.isEmpty())
             edit->setText(path);
     });
@@ -79,7 +81,7 @@ QString defaultProgram()
 
 MainWindow::MainWindow(bool kdeWayland)
 {
-    setWindowTitle(QStringLiteral("Substream · 实时字幕"));
+    setWindowTitle(tr("Substream · Live captions"));
     resize(1060, 720);
     QSettings saved;
     auto* body = new QWidget;
@@ -87,7 +89,7 @@ MainWindow::MainWindow(bool kdeWayland)
     auto* layout = new QVBoxLayout(body);
     layout->setContentsMargins(24, 20, 24, 20);
     layout->setSpacing(16);
-    auto* heading = label(QStringLiteral("实时字幕"));
+    auto* heading = label(tr("Live captions"));
     auto headingFont = heading->font();
     headingFont.setPointSize(22);
     headingFont.setBold(true);
@@ -104,20 +106,20 @@ MainWindow::MainWindow(bool kdeWayland)
     captureLayout->setContentsMargins(16, 20, 16, 16);
     captureLayout->setSpacing(14);
     m_input = new QComboBox;
-    m_input->addItems({ QStringLiteral("系统音频"), QStringLiteral("浏览器标签页") });
+    m_input->addItems({ tr("System audio"), tr("Browser tab") });
     m_input->setCurrentIndex(saved.value("input", 0).toInt() == 1 ? 1 : 0);
-    captureLayout->addWidget(label(QStringLiteral("捕获方式")));
+    captureLayout->addWidget(label(tr("Capture source")));
     captureLayout->addWidget(m_input);
     auto* deviceFields = new QWidget;
     auto* deviceLayout = new QVBoxLayout(deviceFields);
     deviceLayout->setContentsMargins(0, 0, 0, 0);
-    deviceLayout->addWidget(label(QStringLiteral("音频设备")));
+    deviceLayout->addWidget(label(tr("Audio device")));
     m_device = new QComboBox;
     m_device->setMinimumContentsLength(20);
     m_device->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     auto* deviceRow = new QHBoxLayout;
     deviceRow->addWidget(m_device, 1);
-    auto* refresh = new QPushButton(QStringLiteral("刷新"));
+    auto* refresh = new QPushButton(tr("Refresh"));
     deviceRow->addWidget(refresh);
     deviceLayout->addLayout(deviceRow);
     captureLayout->addWidget(deviceFields);
@@ -125,18 +127,18 @@ MainWindow::MainWindow(bool kdeWayland)
     auto* browserLayout = new QVBoxLayout(browserFields);
     browserLayout->setContentsMargins(0, 0, 0, 0);
     m_extension = new QLineEdit(saved.value("extension").toString());
-    m_extension->setPlaceholderText(QStringLiteral("扩展管理页中的 32 位 ID"));
-    browserLayout->addWidget(label(QStringLiteral("Chromium 扩展 ID")));
+    m_extension->setPlaceholderText(tr("32-character ID from the extensions page"));
+    browserLayout->addWidget(label(tr("Chromium extension ID")));
     browserLayout->addWidget(m_extension);
     const auto tokenPath
         = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + "/browser.token";
     m_token = new QLineEdit(saved.value("tokenFile", tokenPath).toString());
-    browserLayout->addWidget(label(QStringLiteral("配对令牌文件")));
-    browserLayout->addWidget(filePicker(m_token, QStringLiteral("所有文件 (*)"), true));
+    browserLayout->addWidget(label(tr("Pairing token file")));
+    browserLayout->addWidget(filePicker(m_token, tr("All files (*)"), true));
     m_videoConfig = new QLineEdit(saved.value("videoConfig").toString());
-    browserLayout->addWidget(label(QStringLiteral("视频任务配置（可选）")));
-    browserLayout->addWidget(filePicker(m_videoConfig, QStringLiteral("视频配置 (*.toml)")));
-    auto* copy = new QPushButton(QStringLiteral("复制配对令牌"));
+    browserLayout->addWidget(label(tr("Video configuration (optional)")));
+    browserLayout->addWidget(filePicker(m_videoConfig, tr("Video configuration (*.toml)")));
+    auto* copy = new QPushButton(tr("Copy pairing token"));
     captureLayout->addWidget(browserFields);
     captureLayout->addStretch();
     const auto inputChanged = [this, deviceFields, browserFields, copy] {
@@ -154,56 +156,57 @@ MainWindow::MainWindow(bool kdeWayland)
         if (token)
             QApplication::clipboard()->setText(*token);
         else
-            m_error->setText(error + QStringLiteral("\n首次使用时，请先启动服务。"));
+            m_error->setText(
+                tr("%1\nStart the service before pairing for the first time.").arg(error));
     });
-    m_settings->addTab(capture, QStringLiteral("音频源"));
+    m_settings->addTab(capture, tr("Audio source"));
 
     auto* model = new QWidget;
     auto* modelLayout = new QVBoxLayout(model);
     modelLayout->setContentsMargins(16, 20, 16, 16);
     modelLayout->setSpacing(14);
     m_config = new QLineEdit(saved.value("config").toString());
-    m_config->setPlaceholderText(QStringLiteral("模型配置（.toml）"));
+    m_config->setPlaceholderText(tr("Model configuration (.toml)"));
     m_program = new QLineEdit(saved.value("program", defaultProgram()).toString());
     m_threads = number(0, 64, saved.value("threads", 0).toInt());
-    m_threads->setSpecialValueText(QStringLiteral("使用模型配置"));
-    modelLayout->addWidget(label(QStringLiteral("模型配置文件")));
-    modelLayout->addWidget(filePicker(m_config, QStringLiteral("模型配置 (*.toml);;所有文件 (*)")));
-    modelLayout->addWidget(label(QStringLiteral("CPU 推理线程数")));
+    m_threads->setSpecialValueText(tr("Use model settings"));
+    modelLayout->addWidget(label(tr("Model configuration file")));
+    modelLayout->addWidget(filePicker(m_config, tr("Model configuration (*.toml);;All files (*)")));
+    modelLayout->addWidget(label(tr("CPU threads")));
     modelLayout->addWidget(m_threads);
-    modelLayout->addWidget(label(QStringLiteral("识别程序")));
-    modelLayout->addWidget(filePicker(m_program, QStringLiteral("所有文件 (*)")));
+    modelLayout->addWidget(label(tr("Substream executable")));
+    modelLayout->addWidget(filePicker(m_program, tr("All files (*)")));
     modelLayout->addStretch();
-    m_settings->addTab(model, QStringLiteral("模型"));
+    m_settings->addTab(model, tr("Model"));
 
     auto* display = new QWidget;
     auto* displayLayout = new QVBoxLayout(display);
     displayLayout->setContentsMargins(16, 20, 16, 16);
     displayLayout->setSpacing(14);
-    m_showOverlay = new QCheckBox(QStringLiteral("显示桌面悬浮字幕"));
+    m_showOverlay = new QCheckBox(tr("Show desktop captions"));
     m_showOverlay->setChecked(kdeWayland && saved.value("overlay", true).toBool());
     m_showOverlay->setEnabled(kdeWayland);
     displayLayout->addWidget(m_showOverlay);
     if (!kdeWayland)
-        displayLayout->addWidget(label(QStringLiteral("悬浮字幕仅支持 KDE Wayland。")));
+        displayLayout->addWidget(label(tr("Desktop captions require KDE Wayland.")));
     auto* form = new QFormLayout;
     m_screen = new QComboBox;
     refreshScreens();
     m_screen->setCurrentIndex(qMax(0, m_screen->findData(saved.value("screen", ""))));
-    m_font = number(14, 72, saved.value("font", 30).toInt(), QStringLiteral(" 像素"));
-    m_width = number(240, 3840, saved.value("width", 900).toInt(), QStringLiteral(" 像素"));
-    m_margin = number(0, 1000, saved.value("margin", 64).toInt(), QStringLiteral(" 像素"));
-    m_hold = number(1, 60, saved.value("holdSeconds", 5).toInt(), QStringLiteral(" 秒"));
-    form->addRow(QStringLiteral("显示屏幕"), m_screen);
-    form->addRow(QStringLiteral("字幕字号"), m_font);
-    form->addRow(QStringLiteral("最大宽度"), m_width);
-    form->addRow(QStringLiteral("底部距离"), m_margin);
-    form->addRow(QStringLiteral("无更新后隐藏"), m_hold);
+    m_font = number(14, 72, saved.value("font", 30).toInt(), tr(" px"));
+    m_width = number(240, 3840, saved.value("width", 900).toInt(), tr(" px"));
+    m_margin = number(0, 1000, saved.value("margin", 64).toInt(), tr(" px"));
+    m_hold = number(1, 60, saved.value("holdSeconds", 5).toInt(), tr(" s"));
+    form->addRow(tr("Display"), m_screen);
+    form->addRow(tr("Text size"), m_font);
+    form->addRow(tr("Maximum width"), m_width);
+    form->addRow(tr("Bottom margin"), m_margin);
+    form->addRow(tr("Hide after inactivity"), m_hold);
     displayLayout->addLayout(form);
     displayLayout->addStretch();
-    m_settings->addTab(display, QStringLiteral("字幕显示"));
+    m_settings->addTab(display, tr("Caption display"));
 
-    auto* current = new QGroupBox(QStringLiteral("当前会话"));
+    auto* current = new QGroupBox(tr("Current session"));
     columns->addWidget(current, 5);
     auto* currentLayout = new QVBoxLayout(current);
     currentLayout->setContentsMargins(16, 20, 16, 16);
@@ -216,23 +219,23 @@ MainWindow::MainWindow(bool kdeWayland)
     currentLayout->addWidget(m_status);
     auto* details = new QFormLayout;
     details->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
-    m_source = label(QStringLiteral("未捕获"));
-    m_model = label(QStringLiteral("未加载"));
+    m_source = label(tr("No capture"));
+    m_model = label(tr("Not loaded"));
     m_source->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
     m_model->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
-    m_duration = label(QStringLiteral("0:00 · 16 kHz / 单声道"));
-    details->addRow(QStringLiteral("音频源"), m_source);
-    details->addRow(QStringLiteral("识别模型"), m_model);
-    details->addRow(QStringLiteral("已接收音频"), m_duration);
+    m_duration = label(tr("0:00 · 16 kHz / mono"));
+    details->addRow(tr("Audio source"), m_source);
+    details->addRow(tr("Speech model"), m_model);
+    details->addRow(tr("Audio received"), m_duration);
     currentLayout->addLayout(details);
     m_level = new QProgressBar;
     m_level->setRange(0, 100);
     m_level->setValue(0);
-    m_level->setFormat(QStringLiteral("输入电平 %p%"));
+    m_level->setFormat(tr("Input level %p%"));
     currentLayout->addWidget(m_level);
     m_preview = new QPlainTextEdit;
     m_preview->setReadOnly(true);
-    m_preview->setPlaceholderText(QStringLiteral("等待字幕"));
+    m_preview->setPlaceholderText(tr("Waiting for captions"));
     m_preview->setMinimumHeight(100);
     currentLayout->addWidget(m_preview, 1);
     m_error = label();
@@ -241,10 +244,10 @@ MainWindow::MainWindow(bool kdeWayland)
     m_log = new QPlainTextEdit;
     m_log->setReadOnly(true);
     m_log->setMaximumBlockCount(200);
-    m_log->setPlaceholderText(QStringLiteral("运行消息"));
+    m_log->setPlaceholderText(tr("Runtime messages"));
     m_log->setMaximumHeight(110);
     m_log->hide();
-    auto* logToggle = new QPushButton(QStringLiteral("运行日志"));
+    auto* logToggle = new QPushButton(tr("Logs"));
     logToggle->setCheckable(true);
     logToggle->setFlat(true);
     logToggle->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
@@ -254,10 +257,10 @@ MainWindow::MainWindow(bool kdeWayland)
 
     auto* actions = new QHBoxLayout;
     actions->addStretch();
-    m_start = new QPushButton(QStringLiteral("开始字幕"));
+    m_start = new QPushButton(tr("Start captions"));
     m_start->setDefault(true);
     m_start->setMinimumHeight(36);
-    m_stop = new QPushButton(QStringLiteral("停止"));
+    m_stop = new QPushButton(tr("Stop"));
     m_stop->setMinimumHeight(36);
     actions->addWidget(copy);
     actions->addWidget(m_start);
@@ -322,7 +325,7 @@ void MainWindow::refreshScreens()
         return;
     const auto selected = m_screen->currentData();
     m_screen->clear();
-    m_screen->addItem(QStringLiteral("主屏幕"), QString());
+    m_screen->addItem(tr("Primary display"), QString());
     for (auto* screen : QGuiApplication::screens())
         m_screen->addItem(screen->name(), screen->name());
     m_screen->setCurrentIndex(qMax(0, m_screen->findData(selected)));
@@ -375,13 +378,12 @@ void MainWindow::refreshState()
         m_settings->widget(i)->setEnabled(!active);
     m_start->setEnabled(!active);
     m_stop->setEnabled(active && !m_session.stopping());
-    m_stop->setText(
-        m_input->currentIndex() == 1 ? QStringLiteral("停止服务") : QStringLiteral("停止"));
+    m_stop->setText(m_input->currentIndex() == 1 ? tr("Stop service") : tr("Stop"));
     m_status->setText(m_session.status());
     m_error->setText(m_session.error());
     m_source->setText(active && !m_session.source().isEmpty()
             ? m_session.source().section('\n', 0, 0)
-            : QStringLiteral("未捕获"));
+            : tr("No capture"));
     m_source->setToolTip(active ? m_session.source() : QString());
     const auto backend = m_session.backend();
     if (active && !backend.isEmpty()) {
@@ -390,19 +392,16 @@ void MainWindow::refreshState()
             languages << value.toString();
         const QFileInfo modelFile(backend.value("model").toString());
         const auto modelName = modelFile.dir().dirName();
-        m_model->setText(modelName
-            + QStringLiteral("\n%1 · %2 个线程")
-                .arg(languages.join(" / "))
-                .arg(backend.value("threads").toInt()));
+        const auto threads = tr("%n thread(s)", nullptr, backend.value("threads").toInt());
+        m_model->setText(tr("%1\n%2 · %3").arg(modelName, languages.join(" / "), threads));
         m_model->setToolTip(backend.value("name").toString() + "\n" + modelFile.filePath());
     } else {
-        m_model->setText(QStringLiteral("未加载"));
+        m_model->setText(tr("Not loaded"));
         m_model->setToolTip({ });
     }
     const auto seconds = m_session.samples() / 16000;
-    m_duration->setText(QStringLiteral("%1:%2 · 16 kHz / 单声道")
-            .arg(seconds / 60)
-            .arg(seconds % 60, 2, 10, QChar('0')));
+    m_duration->setText(
+        tr("%1:%2 · 16 kHz / mono").arg(seconds / 60).arg(seconds % 60, 2, 10, QChar('0')));
     m_level->setVisible(m_input->currentIndex() == 0);
     m_level->setValue(m_session.level());
     if (active && !m_deviceRefresh.isActive())

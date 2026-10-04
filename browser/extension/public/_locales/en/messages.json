@@ -1,0 +1,158 @@
+{
+  "language": {
+    "message": "en"
+  },
+  "extensionName": {
+    "message": "Substream — Live Captions"
+  },
+  "extensionDescription": {
+    "message": "Send tab audio to your local Substream speech engine."
+  },
+  "liveCaptions": {
+    "message": "Live captions"
+  },
+  "pairingToken": {
+    "message": "Local service pairing token"
+  },
+  "tokenLifetime": {
+    "message": "The token is kept until the browser session ends."
+  },
+  "startCaptions": {
+    "message": "Start tab captions"
+  },
+  "stop": {
+    "message": "Stop"
+  },
+  "disconnected": {
+    "message": "Not connected"
+  },
+  "captureScope": {
+    "message": "Captures audio playing in the selected tab. Protected audio is not supported."
+  },
+  "recognizing": {
+    "message": "Recognizing · $BACKEND$",
+    "placeholders": {
+      "backend": {
+        "content": "$1",
+        "example": "sherpa-onnx"
+      }
+    }
+  },
+  "starting": {
+    "message": "Connecting and loading the model…"
+  },
+  "stopping": {
+    "message": "Saving final captions…"
+  },
+  "finished": {
+    "message": "Captions stopped"
+  },
+  "connectionFailed": {
+    "message": "Connection failed"
+  },
+  "noTab": {
+    "message": "No tab is available for capture"
+  },
+  "startFailed": {
+    "message": "Could not start captions"
+  },
+  "stopFailed": {
+    "message": "Could not stop captions"
+  },
+  "noCapture": {
+    "message": "No capture is active"
+  },
+  "alreadyStarting": {
+    "message": "Capture is already starting"
+  },
+  "alreadyActive": {
+    "message": "Capture is already active"
+  },
+  "invalidToken": {
+    "message": "The pairing token must contain 64 hexadecimal characters"
+  },
+  "tabTitle": {
+    "message": "Tab $ID$",
+    "placeholders": {
+      "id": {
+        "content": "$1",
+        "example": "12"
+      }
+    }
+  },
+  "preparationFailed": {
+    "message": "Could not prepare the local service"
+  },
+  "connectionTimeout": {
+    "message": "The local connection or model loading timed out"
+  },
+  "cannotConnect": {
+    "message": "Cannot connect to the local Substream service"
+  },
+  "serviceDisconnected": {
+    "message": "The local service disconnected"
+  },
+  "restartAfterDisconnect": {
+    "message": "The local service disconnected. Start captions again."
+  },
+  "unsupportedProtocol": {
+    "message": "Unsupported local service protocol"
+  },
+  "invalidMessage": {
+    "message": "The local service returned an invalid message"
+  },
+  "cancelled": {
+    "message": "Capture was cancelled"
+  },
+  "notReady": {
+    "message": "The local service is not ready"
+  },
+  "sampleRateUnavailable": {
+    "message": "16 kHz audio capture is unavailable"
+  },
+  "audioDisconnected": {
+    "message": "The audio connection disconnected"
+  },
+  "audioBacklog": {
+    "message": "Audio delivery is too slow. Start captions again."
+  },
+  "queueFull": {
+    "message": "The browser audio queue is full. Start captions again."
+  },
+  "processorStopped": {
+    "message": "The audio processor stopped"
+  },
+  "audioNotStarted": {
+    "message": "Audio capture has not started"
+  },
+  "flushTimeout": {
+    "message": "Saving the remaining audio timed out"
+  },
+  "finishTimeout": {
+    "message": "Caption finalization timed out"
+  },
+  "notPrepared": {
+    "message": "The local service has not been prepared"
+  },
+  "unknownCommand": {
+    "message": "Unknown capture command"
+  },
+  "videoRequestFailed": {
+    "message": "Video request failed (HTTP $STATUS$)",
+    "placeholders": {
+      "status": {
+        "content": "$1",
+        "example": "503"
+      }
+    }
+  },
+  "invalidJobId": {
+    "message": "Invalid video job ID"
+  },
+  "invalidVideoUrl": {
+    "message": "The video URL must use HTTP or HTTPS"
+  },
+  "invalidVideoAction": {
+    "message": "Invalid video job action"
+  }
+}

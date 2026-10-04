@@ -3,6 +3,7 @@
 #include "kde_window.h"
 #include "main_window.h"
 #include "token_file.h"
+#include "translations.h"
 #include <QApplication>
 
 #include <QCommandLineParser>
@@ -21,24 +22,41 @@ int main(int argc, char** argv)
     QCoreApplication::setApplicationName(QStringLiteral("substream-overlay"));
     QCoreApplication::setApplicationVersion(QStringLiteral("0.1.0"));
     QGuiApplication::setDesktopFileName(QStringLiteral("substream-overlay"));
+    Translations translations;
 
     QCommandLineParser parser;
-    parser.setApplicationDescription(QStringLiteral("Desktop controls and KDE Wayland captions"));
+    parser.setApplicationDescription(
+        QCoreApplication::translate("main", "Desktop controls and KDE Wayland captions"));
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addOptions({
-        { QStringLiteral("stdin"), "Read newline-delimited caption events from standard input." },
+        { QStringLiteral("stdin"),
+            QCoreApplication::translate(
+                "main", "Read newline-delimited caption events from standard input.") },
         { QStringLiteral("token-file"),
-            "Subscribe to the local subtitle service using a private token file.", "path" },
-        { QStringLiteral("server"), "Display WebSocket URL (loopback only).", "url",
+            QCoreApplication::translate(
+                "main", "Subscribe to the local subtitle service using a private token file."),
+            "path" },
+        { QStringLiteral("server"),
+            QCoreApplication::translate("main", "Display WebSocket URL (loopback only)."), "url",
             "ws://127.0.0.1:9743/v1/display" },
-        { QStringLiteral("list-screens"), "List available display names and exit." },
-        { QStringLiteral("screen"), "Display name; defaults to the primary display.", "name" },
-        { QStringLiteral("width"), "Maximum width in logical pixels.", "pixels", "900" },
-        { QStringLiteral("font-size"), "Text size in logical pixels.", "pixels", "30" },
-        { QStringLiteral("bottom-margin"), "Distance above the bottom edge in logical pixels.",
+        { QStringLiteral("list-screens"),
+            QCoreApplication::translate("main", "List available display names and exit.") },
+        { QStringLiteral("screen"),
+            QCoreApplication::translate("main", "Display name; defaults to the primary display."),
+            "name" },
+        { QStringLiteral("width"),
+            QCoreApplication::translate("main", "Maximum width in logical pixels."), "pixels",
+            "900" },
+        { QStringLiteral("font-size"),
+            QCoreApplication::translate("main", "Text size in logical pixels."), "pixels", "30" },
+        { QStringLiteral("bottom-margin"),
+            QCoreApplication::translate(
+                "main", "Distance above the bottom edge in logical pixels."),
             "pixels", "64" },
-        { QStringLiteral("hold-ms"), "Hide captions after this interval without an update.",
+        { QStringLiteral("hold-ms"),
+            QCoreApplication::translate(
+                "main", "Hide captions after this interval without an update."),
             "milliseconds", "5000" },
     });
     parser.process(app);
@@ -60,11 +78,13 @@ int main(int argc, char** argv)
         return app.exec();
     }
     if (!kdeWayland) {
-        qCritical("This renderer requires a KDE Plasma Wayland session");
+        qCritical().noquote() << QCoreApplication::translate(
+            "main", "This renderer requires a KDE Plasma Wayland session");
         return 1;
     }
     if (parser.isSet("stdin") && parser.isSet("token-file")) {
-        qCritical("Choose either --stdin or --token-file");
+        qCritical().noquote() << QCoreApplication::translate(
+            "main", "Choose either --stdin or --token-file");
         return 1;
     }
     const auto number
@@ -72,7 +92,11 @@ int main(int argc, char** argv)
         bool valid;
         const int value = parser.value(name).toInt(&valid);
         if (!valid || value < minimum || value > maximum) {
-            qCritical().noquote() << name << "must be between" << minimum << "and" << maximum;
+            qCritical().noquote() << QCoreApplication::translate(
+                "main", "%1 must be between %2 and %3")
+                                         .arg(name)
+                                         .arg(minimum)
+                                         .arg(maximum);
             return std::nullopt;
         }
         return value;
@@ -90,7 +114,8 @@ int main(int argc, char** argv)
         if (server.scheme() != "ws" || !QHostAddress(server.host()).isLoopback()
             || server.path() != "/v1/display" || !server.userInfo().isEmpty() || server.hasQuery()
             || server.hasFragment() || server.port(9743) < 1) {
-            qCritical("Server must be a loopback ws:// address with path /v1/display");
+            qCritical().noquote() << QCoreApplication::translate(
+                "main", "Server must be a loopback ws:// address with path /v1/display");
             return 1;
         }
         QString error;

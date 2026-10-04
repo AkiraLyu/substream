@@ -1,3 +1,6 @@
+import { validateToken } from "./auth.ts";
+import { message } from "./i18n.ts";
+
 /** Complete-video operations, independent of the live tab audio capture. */
 export type VideoStage =
   | "queued"
@@ -41,7 +44,7 @@ export type VideoAction =
 const endpoint = "http://127.0.0.1:9743/v1/video/jobs";
 
 async function request<T>(token: string, path: string, method: string, body?: object): Promise<T> {
-  if (!/^[a-fA-F0-9]{64}$/.test(token)) throw new Error("配对令牌需要 64 位十六进制字符");
+  validateToken(token);
   const response = await fetch(endpoint + path, {
     method,
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -52,20 +55,24 @@ async function request<T>(token: string, path: string, method: string, body?: ob
   });
   if (!response.ok) {
     const detail = (await response.json().catch(() => null)) as { message?: string } | null;
-    throw new Error(detail?.message ?? `视频任务请求失败（${response.status}）`);
+    throw new Error(detail?.message ?? message("videoRequestFailed", String(response.status)));
   }
   return (await response.json()) as T;
 }
 
 function jobPath(id: string): string {
-  if (!/^[a-f0-9]{32}$/.test(id)) throw new Error("无效的视频任务 ID");
+  if (!/^[a-f0-9]{32}$/.test(id)) throw new Error(message("invalidJobId"));
   return `/${id}`;
 }
 
 export function submitVideo(token: string, url: string): Promise<VideoJob> {
-  const parsed = new URL(url);
-  if (!["http:", "https:"].includes(parsed.protocol))
-    throw new Error("视频链接需要使用 HTTP 或 HTTPS");
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(message("invalidVideoUrl"));
+  }
+  if (!["http:", "https:"].includes(parsed.protocol)) throw new Error(message("invalidVideoUrl"));
   return request(token, "", "POST", { url });
 }
 
@@ -95,5 +102,5 @@ export async function handleVideoAction(
     case "document":
       return getVideoDocument(token, action.id);
   }
-  throw new Error("无效的视频任务操作");
+  throw new Error(message("invalidVideoAction"));
 }

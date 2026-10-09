@@ -45,17 +45,27 @@ def exercise(root, binary):
         "color=size=32x32:rate=5", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
         "-t", "4", "-c:v", "ffv1", "-c:a", "pcm_s16le", str(media))
     content = media.read_bytes()
+    captions = ('WEBVTT\n\n00:00:00.500 --> 00:00:02.000\n'
+                '<i>已有字幕</i> &amp; text\n\n'
+                '00:00:01.500 --> 00:00:03.000\n另一个说话人\n').encode()
+    page = (b'<html><title>Captioned video</title><video controls src="/clip.mkv">'
+            b'<track kind="subtitles" src="/captions.vtt" srclang="zh" label="Chinese">'
+            b'</video></html>')
 
     class MediaHandler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
             if self.headers.get("Cookie") != "session=fixture-login":
                 self.send_error(403)
                 return
+            body, mime = {
+                "/watch": (page, "text/html"),
+                "/captions.vtt": (captions, "text/vtt"),
+            }.get(self.path, (content, "video/x-matroska"))
             self.send_response(200)
-            self.send_header("Content-Type", "video/x-matroska")
-            self.send_header("Content-Length", str(len(content)))
+            self.send_header("Content-Type", mime)
+            self.send_header("Content-Length", str(len(body)))
             self.end_headers()
-            self.wfile.write(content)
+            self.wfile.write(body)
 
         def log_message(self, *_args):
             pass
@@ -142,6 +152,43 @@ pathlib.Path(option('--output-file') + '.json').write_bytes(result)
         assert cli_job["result"]["directory"] != job["result"]["directory"]
         assert check_result(cli_job["result"], url) == document
         assert check_result(job["result"], url) == document
+
+        # Existing captions work without a model or recognizer. File cookies override
+        # the configured browser, and the user's cookie jar remains unchanged.
+        cookie_file = root / "cookies.txt"
+        cookie_file.write_text("# Netscape HTTP Cookie File\n"
+            "127.0.0.1\tFALSE\t/\tFALSE\t0\tsession\tfixture-login\n")
+        original_cookies = cookie_file.read_bytes()
+        caption_config = root / "captions.toml"
+        caption_config.write_text('output_dir = "output"\nlanguage = "zh"\n'
+            'cookies_from_browser = "firefox:/missing/profile"\n')
+        caption_url = url.replace("/clip.mkv", "/watch")
+        output = run(binary, "video", caption_url, "--config", str(caption_config),
+                     "--cookies-file", str(cookie_file))
+        caption_job = json.loads(output.stdout.splitlines()[-1])
+        assert caption_job["stage"] == "completed", caption_job
+        result = caption_job["result"]
+        assert result["subtitle_source"] == "provided"
+        assert Path(result["video"]).stat().st_size > 0
+        imported = json.loads(Path(result["document"]).read_text())
+        assert imported["subtitle_source"] == "provided"
+        assert imported["transcript"]["language"] == "zh"
+        segments = imported["transcript"]["segments"]
+        assert segments == [
+            {"id": 0, "start_ms": 500, "end_ms": 1500, "text": "已有字幕 & text"},
+            {"id": 1, "start_ms": 1500, "end_ms": 2000,
+             "text": "已有字幕 & text\n另一个说话人"},
+            {"id": 2, "start_ms": 2000, "end_ms": 3000, "text": "另一个说话人"},
+        ], segments
+        assert "&amp; text" in Path(result["srt"]).read_text()
+        assert Path(result["vtt"]).read_text().startswith("WEBVTT\n")
+        assert not (Path(result["directory"]) / "cookies.txt").exists()
+        assert cookie_file.read_bytes() == original_cookies
+
+        anonymous = subprocess.run([binary, "video", caption_url, "--config", str(config),
+                                    "--no-cookies"], capture_output=True, text=True, timeout=30)
+        assert anonymous.returncode != 0, "anonymous download must not use configured cookies"
+        assert "403" in anonymous.stderr
     finally:
         service.send_signal(signal.SIGTERM)
         try:

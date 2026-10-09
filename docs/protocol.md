@@ -155,6 +155,7 @@ Rust 和 TypeScript 共用 [二进制样本](../fixtures/audio-v1.bin) 检查兼
   "stage": "completed",
   "url": "https://example.com/video",
   "result": {
+    "subtitle_source": "provided",
     "directory": "/output/video-abc123",
     "video": "/output/video-abc123/media.mkv",
     "srt": "/output/video-abc123/subtitles.srt",
@@ -165,7 +166,9 @@ Rust 和 TypeScript 共用 [二进制样本](../fixtures/audio-v1.bin) 检查兼
 }
 ```
 
-`stage` 可为 `queued`、`downloading`、`converting`、`transcribing`、`cancelling`、`completed`、`cancelled` 或 `failed`。客户端应按阶段显示状态，不能据此推算完成百分比。仅 `completed` 带有 `result`；失败或取消的原因在 `error` 中。
+`stage` 可为 `queued`、`checking_subtitles`、`downloading`、`importing_subtitles`、`converting`、`transcribing`、`cancelling`、`completed`、`cancelled` 或 `failed`。已有字幕走 `importing_subtitles`，没有可用字幕才进入 `converting` 和 `transcribing`。客户端应按阶段显示状态，不能据此推算完成百分比。仅 `completed` 带有 `result`；失败或取消的原因在 `error` 中。
+
+结果和文档中的 `subtitle_source` 为 `provided`（人工字幕）、`automatic`（平台自动字幕）或 `recognition`（本地语音识别）。
 
 结果路径属于运行服务的本机，视频扩展名由实际下载格式决定。扩展获取字幕内容时应使用 `/document`，不直接读取文件路径。文档格式如下：
 
@@ -173,6 +176,7 @@ Rust 和 TypeScript 共用 [二进制样本](../fixtures/audio-v1.bin) 检查兼
 {
   "schema_version": 1,
   "source": {"url": "https://example.com/video", "id": "video-id", "title": "视频标题"},
+  "subtitle_source": "provided",
   "transcript": {
     "schema_version": 1,
     "source": "https://example.com/video",

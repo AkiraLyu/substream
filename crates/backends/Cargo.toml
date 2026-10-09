@@ -17,6 +17,9 @@ tempfile.workspace = true
 url.workspace = true
 rustix.workspace = true
 sherpa-onnx = { version = "=1.13.8", optional = true }
+subtp = "0.2"
+html-escape = "0.2"
+regex = "1"
 
 [lints]
 workspace = true

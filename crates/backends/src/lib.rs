@@ -6,6 +6,7 @@ pub mod pcm;
 pub mod process;
 #[cfg(feature = "sherpa")]
 pub mod sherpa;
+pub mod subtitles;
 
 use std::path::PathBuf;
 

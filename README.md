@@ -88,20 +88,24 @@ cargo run -p substream --release -- transcribe input.mp4 \
 
 ## 网页视频字幕
 
-安装 [yt-dlp](https://github.com/yt-dlp/yt-dlp)、FFmpeg 和 whisper-cli，准备 whisper.cpp 的 GGML 模型。视频任务使用完整音轨识别，不需要启用 `sherpa`。
+安装 [yt-dlp](https://github.com/yt-dlp/yt-dlp) 和 FFmpeg。任务先检查已有字幕，优先使用人工字幕，其次使用平台自动字幕；没有可用字幕时才通过 whisper-cli 识别完整音轨，此时需要 whisper.cpp 的 GGML 模型。视频任务不需要启用 `sherpa`。
 
-复制 [视频配置](configs/video.example.toml)，填写模型、输出目录和浏览器名称后运行：
+复制 [视频配置](configs/video.example.toml)，填写输出目录、cookies 来源和备用识别模型。在桌面程序的“视频字幕”页面选择配置、填入链接，即可开始；也可使用命令行：
 
 ```bash
 cargo run -p substream --release -- video 'https://example.com/video' \
   --config configs/video.example.toml
 ```
 
-`cookies_from_browser` 指定读取登录状态的浏览器，例如 `firefox`、`chromium` 或 `chrome+kwallet6`。需要指定资料目录时，使用 `firefox:/path/to/profile`。删除此配置项即可匿名下载。Cookie 由本机 yt-dlp 读取，不经过扩展或字幕接口；浏览器资料格式和密钥环支持见 [yt-dlp 参数说明](https://github.com/yt-dlp/yt-dlp#filesystem-options)。
+`cookies_from_browser` 指定读取登录状态的浏览器，例如 `firefox`、`chromium` 或 `chrome+kwallet6`。指定用户配置目录时，使用 `firefox:/path/to/profile`。也可用 `cookies_file` 指定 Netscape 格式的 cookies 文件，两项不能同时设置。省略两项即可匿名下载。Cookie 由本机 yt-dlp 读取，不经过扩展或字幕接口；浏览器格式和密钥环支持见 [yt-dlp 参数说明](https://github.com/yt-dlp/yt-dlp#filesystem-options)。
 
-每个任务创建独立目录，保存下载的视频、`subtitles.srt`、`subtitles.vtt` 和 `document.json`。JSON 文档包含来源链接、标题、语言及字幕段落时间，可作为后续总结功能的输入。命令按行输出 JSON 任务状态，完成状态包含结果路径。重复下载不会覆盖已有结果。
+桌面页面和命令行均可覆盖本次任务的 cookies 来源。命令行使用 `--cookies-from-browser`、`--cookies-file` 或 `--no-cookies`，三者只能选一个。cookies 文件会复制到私有任务目录，原文件不会被修改，任务结束后删除副本。
 
-按 Ctrl+C 可取消任务。`timeout_secs` 分别限制下载、音频转换和识别时间；取消、超时或失败会结束子进程并删除本次任务的文件，成功后只删除临时音频。每次请求处理一个视频，纯播放列表链接只取第一项，不支持直播。
+`language` 指定字幕和识别语言。设为 `auto` 时，在同类字幕中优先匹配视频原始语言，其次选择英语，再选择其他可用语言。指定语言时只使用匹配的字幕，包括同一语言的地区变体。字幕下载或解析失败会报告错误，不会静默改为语音识别。当前支持 yt-dlp 提供的 SRT、WebVTT、TTML、ASS 和 SSA 字幕；不检测画面内嵌文字。
+
+每个任务创建独立目录，保存下载的视频、`subtitles.srt`、`subtitles.vtt` 和 `document.json`。JSON 文档包含来源链接、标题、语言、字幕来源和段落时间，可作为后续总结功能的输入。已有字幕出现重叠时，按时间边界合并同时显示的文字。命令按行输出 JSON 任务状态，完成状态包含结果路径。重复下载不会覆盖已有结果。
+
+按 Ctrl+C 可取消任务。`timeout_secs` 分别限制字幕检查、下载、音频转换和识别时间；取消、超时或失败会结束子进程并删除任务目录，成功后删除中间文件。每次请求处理一个视频，纯播放列表链接只取第一项，不支持直播。
 
 在本地服务中启用视频任务：
 
@@ -112,7 +116,7 @@ cargo run -p substream --release -- serve \
   --allow-origin 'chrome-extension://<extension-id>'
 ```
 
-令牌需先用 `token` 命令创建。同时使用实时字幕时，再加上 `--config` 并以 `--features sherpa` 构建。桌面程序的浏览器模式也可以选择“视频任务配置”。
+令牌需先用 `token` 命令创建。同时使用实时字幕时，再加上 `--config` 并以 `--features sherpa` 构建。桌面程序启动浏览器服务时，使用“视频字幕”页面选中的视频配置。
 
 服务提供提交、查询、取消和读取字幕文档的 [HTTP 接口](docs/protocol.md#视频任务)。扩展的 `video.ts` 和后台消息接口可直接调用这些功能；当前弹窗尚未提供视频下载按钮，也未接入 AI 模型。
 

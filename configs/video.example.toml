@@ -1,14 +1,16 @@
 # 相对文件路径以本配置文件所在目录为准。
 output_dir = "../output/videos"
+# 没有可用字幕时才需要 Whisper 模型。
 model = "../models/ggml-small.bin"
 language = "auto"
 threads = 4
-# 分别限制下载、音频转换和识别的等待秒数。
+# 分别限制字幕检查、下载、音频转换和识别的等待秒数。
 timeout_secs = 3600
 
 # 支持 yt-dlp 的 BROWSER[+KEYRING][:PROFILE][::CONTAINER] 格式。
-# 删除此项即可匿名下载；Cookie 不会发送给浏览器扩展。
+# 与 cookies_file 二选一；删除两项即可匿名下载。
 cookies_from_browser = "firefox"
+# cookies_file = "../cookies.txt"
 
 yt_dlp_bin = "yt-dlp"
 ffmpeg_bin = "ffmpeg"

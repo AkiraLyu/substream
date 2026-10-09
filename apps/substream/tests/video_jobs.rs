@@ -89,8 +89,9 @@ async fn video_jobs_require_pairing_and_can_be_cancelled_retried_and_stopped() {
             recognizer: None,
             video: Some(VideoConfig {
                 output_dir: output_dir.clone(),
-                model,
+                model: Some(model),
                 cookies_from_browser: None,
+                cookies_file: None,
                 yt_dlp_bin: downloader.clone(),
                 ffmpeg_bin: "ffmpeg".into(),
                 whisper_bin: "whisper-cli".into(),

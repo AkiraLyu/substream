@@ -62,6 +62,15 @@ enum Command {
         url: String,
         #[arg(long)]
         config: PathBuf,
+        /// Use a Netscape cookies file instead of the configured cookies source.
+        #[arg(long, conflicts_with_all = ["cookies_from_browser", "no_cookies"])]
+        cookies_file: Option<PathBuf>,
+        /// Read cookies from a browser, optionally with a profile selector.
+        #[arg(long, conflicts_with = "no_cookies")]
+        cookies_from_browser: Option<String>,
+        /// Download anonymously, ignoring any configured cookies source.
+        #[arg(long)]
+        no_cookies: bool,
     },
     /// Create a private 256-bit authentication token file without overwriting.
     Token {
@@ -161,7 +170,23 @@ async fn main() -> Result<()> {
             })
             .await
         }
-        Command::Video { url, config } => video(VideoConfig::load(&config)?, url).await,
+        Command::Video {
+            url,
+            config,
+            cookies_file,
+            cookies_from_browser,
+            no_cookies,
+        } => {
+            let mut config = VideoConfig::load(&config)?;
+            if no_cookies || cookies_file.is_some() || cookies_from_browser.is_some() {
+                config.cookies_file = cookies_file
+                    .map(|path| path.canonicalize())
+                    .transpose()
+                    .context("open cookies file")?;
+                config.cookies_from_browser = cookies_from_browser;
+            }
+            video(config, url).await
+        }
         Command::Transcribe {
             input,
             model,

@@ -4,7 +4,9 @@ import { message } from "./i18n.ts";
 /** Complete-video operations, independent of the live tab audio capture. */
 export type VideoStage =
   | "queued"
+  | "checking_subtitles"
   | "downloading"
+  | "importing_subtitles"
   | "converting"
   | "transcribing"
   | "cancelling"
@@ -17,6 +19,7 @@ export interface VideoJob {
   stage: VideoStage;
   url: string;
   result: {
+    subtitle_source: SubtitleSource;
     directory: string;
     video: string;
     srt: string;
@@ -26,10 +29,13 @@ export interface VideoJob {
   error: string | null;
 }
 
+export type SubtitleSource = "provided" | "automatic" | "recognition";
+
 /** Source and timed text consumed by a future summarization feature. */
 export interface VideoDocument {
   schema_version: 1;
   source: { url: string; id: string; title: string };
+  subtitle_source: SubtitleSource;
   transcript: {
     schema_version: 1;
     source: string;

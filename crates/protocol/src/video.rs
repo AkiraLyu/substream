@@ -15,7 +15,9 @@ pub struct VideoRequest {
 #[serde(rename_all = "snake_case")]
 pub enum VideoStage {
     Queued,
+    CheckingSubtitles,
     Downloading,
+    ImportingSubtitles,
     Converting,
     Transcribing,
     Cancelling,
@@ -42,11 +44,21 @@ pub struct VideoSource {
 pub struct VideoDocument {
     pub schema_version: u8,
     pub source: VideoSource,
+    pub subtitle_source: SubtitleSource,
     pub transcript: Transcript,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SubtitleSource {
+    Provided,
+    Automatic,
+    Recognition,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct VideoResult {
+    pub subtitle_source: SubtitleSource,
     pub directory: PathBuf,
     pub video: PathBuf,
     pub srt: PathBuf,

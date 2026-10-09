@@ -26,6 +26,7 @@ target_compile_options(caption-client PRIVATE -Wall -Wextra -Wpedantic)
 add_library(desktop-session STATIC
     src/audio_devices.cpp src/audio_devices.h
     src/session_controller.cpp src/session_controller.h
+    src/video_controller.cpp src/video_controller.h
 )
 target_link_libraries(desktop-session PUBLIC caption-client)
 target_compile_options(desktop-session PRIVATE -Wall -Wextra -Wpedantic)
@@ -33,6 +34,8 @@ target_compile_options(desktop-session PRIVATE -Wall -Wextra -Wpedantic)
 qt_add_executable(substream-overlay
     src/main.cpp
     src/main_window.cpp src/main_window.h
+    src/video_page.cpp src/video_page.h
+    src/widgets.cpp src/widgets.h
     src/translations.cpp src/translations.h
     src/kde_window.cpp
     src/kde_window.h

@@ -79,17 +79,17 @@
 <context>
     <name>FilePicker</name>
     <message>
-        <location filename="../src/main_window.cpp" line="54"/>
+        <location filename="../src/widgets.cpp" line="25"/>
         <source>Browse…</source>
         <translation>选择…</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="60"/>
+        <location filename="../src/widgets.cpp" line="31"/>
         <source>Choose a token file location</source>
         <translation>选择令牌位置</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="63"/>
+        <location filename="../src/widgets.cpp" line="34"/>
         <source>Choose a file</source>
         <translation>选择文件</translation>
     </message>
@@ -115,265 +115,255 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../src/main_window.cpp" line="84"/>
-        <source>Substream · Live captions</source>
-        <translation>Substream · 实时字幕</translation>
-    </message>
-    <message>
-        <location filename="../src/main_window.cpp" line="92"/>
+        <location filename="../src/main_window.cpp" line="68"/>
         <source>Live captions</source>
         <translation>实时字幕</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="109"/>
+        <location filename="../src/main_window.cpp" line="85"/>
         <source>System audio</source>
         <translation>系统音频</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="109"/>
+        <location filename="../src/main_window.cpp" line="85"/>
         <source>Browser tab</source>
         <translation>浏览器标签页</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="111"/>
+        <location filename="../src/main_window.cpp" line="87"/>
         <source>Capture source</source>
         <translation>捕获方式</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="116"/>
+        <location filename="../src/main_window.cpp" line="92"/>
         <source>Audio device</source>
         <translation>音频设备</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="122"/>
+        <location filename="../src/main_window.cpp" line="98"/>
         <source>Refresh</source>
         <translation>刷新</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="130"/>
+        <location filename="../src/main_window.cpp" line="106"/>
         <source>32-character ID from the extensions page</source>
         <translation>扩展管理页中的 32 位 ID</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="131"/>
+        <location filename="../src/main_window.cpp" line="107"/>
         <source>Chromium extension ID</source>
         <translation>Chromium 扩展 ID</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="136"/>
+        <location filename="../src/main_window.cpp" line="112"/>
         <source>Pairing token file</source>
         <translation>配对令牌文件</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="137"/>
-        <location filename="../src/main_window.cpp" line="178"/>
+        <location filename="../src/main_window.cpp" line="113"/>
+        <location filename="../src/main_window.cpp" line="241"/>
         <source>All files (*)</source>
         <translation>所有文件 (*)</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="139"/>
-        <source>Video configuration (optional)</source>
-        <translation>视频任务配置（可选）</translation>
-    </message>
-    <message>
-        <location filename="../src/main_window.cpp" line="140"/>
-        <source>Video configuration (*.toml)</source>
-        <translation>视频配置 (*.toml)</translation>
-    </message>
-    <message>
-        <location filename="../src/main_window.cpp" line="141"/>
+        <location filename="../src/main_window.cpp" line="114"/>
         <source>Copy pairing token</source>
         <translation>复制配对令牌</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="160"/>
+        <location filename="../src/main_window.cpp" line="133"/>
         <source>%1
 Start the service before pairing for the first time.</source>
         <translation>%1
 首次配对前，请先启动服务。</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="162"/>
-        <location filename="../src/main_window.cpp" line="227"/>
+        <location filename="../src/main_window.cpp" line="135"/>
+        <location filename="../src/main_window.cpp" line="198"/>
         <source>Audio source</source>
         <translation>音频源</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="169"/>
+        <location filename="../src/main_window.cpp" line="142"/>
         <source>Model configuration (.toml)</source>
         <translation>模型配置（.toml）</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="172"/>
+        <location filename="../src/main_window.cpp" line="145"/>
         <source>Use model settings</source>
         <translation>使用模型配置</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="173"/>
+        <location filename="../src/main_window.cpp" line="146"/>
         <source>Model configuration file</source>
         <translation>模型配置文件</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="174"/>
+        <location filename="../src/main_window.cpp" line="147"/>
         <source>Model configuration (*.toml);;All files (*)</source>
         <translation>模型配置 (*.toml);;所有文件 (*)</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="175"/>
+        <location filename="../src/main_window.cpp" line="148"/>
         <source>CPU threads</source>
         <translation>CPU 推理线程数</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="177"/>
+        <location filename="../src/main_window.cpp" line="242"/>
         <source>Substream executable</source>
         <translation>识别程序</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="180"/>
+        <location filename="../src/main_window.cpp" line="151"/>
         <source>Model</source>
         <translation>模型</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="186"/>
+        <location filename="../src/main_window.cpp" line="70"/>
+        <source>Video subtitles</source>
+        <translation>视频字幕</translation>
+    </message>
+    <message>
+        <location filename="../src/main_window.cpp" line="157"/>
         <source>Show desktop captions</source>
         <translation>显示桌面悬浮字幕</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="191"/>
+        <location filename="../src/main_window.cpp" line="162"/>
         <source>Desktop captions require KDE Wayland.</source>
         <translation>悬浮字幕仅支持 KDE Wayland。</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="196"/>
-        <location filename="../src/main_window.cpp" line="197"/>
-        <location filename="../src/main_window.cpp" line="198"/>
+        <location filename="../src/main_window.cpp" line="167"/>
+        <location filename="../src/main_window.cpp" line="168"/>
+        <location filename="../src/main_window.cpp" line="169"/>
         <source> px</source>
         <translation> 像素</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="199"/>
+        <location filename="../src/main_window.cpp" line="170"/>
         <source> s</source>
         <translation> 秒</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="200"/>
+        <location filename="../src/main_window.cpp" line="171"/>
         <source>Display</source>
         <translation>显示屏幕</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="201"/>
+        <location filename="../src/main_window.cpp" line="172"/>
         <source>Text size</source>
         <translation>字幕字号</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="202"/>
+        <location filename="../src/main_window.cpp" line="173"/>
         <source>Maximum width</source>
         <translation>最大宽度</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="203"/>
+        <location filename="../src/main_window.cpp" line="174"/>
         <source>Bottom margin</source>
         <translation>底部距离</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="204"/>
+        <location filename="../src/main_window.cpp" line="175"/>
         <source>Hide after inactivity</source>
         <translation>无更新后隐藏</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="207"/>
+        <location filename="../src/main_window.cpp" line="178"/>
         <source>Caption display</source>
         <translation>字幕显示</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="209"/>
+        <location filename="../src/main_window.cpp" line="180"/>
         <source>Current session</source>
         <translation>当前会话</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="222"/>
-        <location filename="../src/main_window.cpp" line="386"/>
+        <location filename="../src/main_window.cpp" line="193"/>
+        <location filename="../src/main_window.cpp" line="371"/>
         <source>No capture</source>
         <translation>未捕获</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="223"/>
-        <location filename="../src/main_window.cpp" line="399"/>
+        <location filename="../src/main_window.cpp" line="194"/>
+        <location filename="../src/main_window.cpp" line="384"/>
         <source>Not loaded</source>
         <translation>未加载</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="226"/>
+        <location filename="../src/main_window.cpp" line="197"/>
         <source>0:00 · 16 kHz / mono</source>
         <translation>0:00 · 16 kHz / 单声道</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="228"/>
+        <location filename="../src/main_window.cpp" line="199"/>
         <source>Speech model</source>
         <translation>识别模型</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="229"/>
+        <location filename="../src/main_window.cpp" line="200"/>
         <source>Audio received</source>
         <translation>已接收音频</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="234"/>
+        <location filename="../src/main_window.cpp" line="205"/>
         <source>Input level %p%</source>
         <translation>输入电平 %p%</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="238"/>
+        <location filename="../src/main_window.cpp" line="209"/>
         <source>Waiting for captions</source>
         <translation>等待字幕</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="247"/>
+        <location filename="../src/main_window.cpp" line="218"/>
         <source>Runtime messages</source>
         <translation>运行消息</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="250"/>
+        <location filename="../src/main_window.cpp" line="221"/>
         <source>Logs</source>
         <translation>运行日志</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="260"/>
+        <location filename="../src/main_window.cpp" line="231"/>
         <source>Start captions</source>
         <translation>开始字幕</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="263"/>
-        <location filename="../src/main_window.cpp" line="381"/>
+        <location filename="../src/main_window.cpp" line="234"/>
+        <location filename="../src/main_window.cpp" line="366"/>
         <source>Stop</source>
         <translation>停止</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="328"/>
+        <location filename="../src/main_window.cpp" line="313"/>
         <source>Primary display</source>
         <translation>主屏幕</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="381"/>
+        <location filename="../src/main_window.cpp" line="366"/>
         <source>Stop service</source>
         <translation>停止服务</translation>
     </message>
     <message numerus="yes">
-        <location filename="../src/main_window.cpp" line="395"/>
+        <location filename="../src/main_window.cpp" line="380"/>
         <source>%n thread(s)</source>
         <translation>
             <numerusform>%n 个线程</numerusform>
         </translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="396"/>
+        <location filename="../src/main_window.cpp" line="381"/>
         <source>%1
 %2 · %3</source>
         <translation>%1
 %2 · %3</translation>
     </message>
     <message>
-        <location filename="../src/main_window.cpp" line="404"/>
+        <location filename="../src/main_window.cpp" line="389"/>
         <source>%1:%2 · 16 kHz / mono</source>
         <translation>%1:%2 · 16 kHz / 单声道</translation>
     </message>
@@ -571,6 +561,215 @@ Start the service before pairing for the first time.</source>
         <location filename="../src/token_file.cpp" line="28"/>
         <source>The token must contain 64 hexadecimal characters.</source>
         <translation>令牌应包含 64 位十六进制字符。</translation>
+    </message>
+</context>
+<context>
+    <name>VideoController</name>
+    <message>
+        <location filename="../src/video_controller.cpp" line="13"/>
+        <source>Cancellation timed out. The video process was terminated.</source>
+        <translation>取消超时，已终止视频进程。</translation>
+    </message>
+    <message>
+        <location filename="../src/video_controller.cpp" line="30"/>
+        <source>Cannot start Substream: %1</source>
+        <translation>无法启动 Substream：%1</translation>
+    </message>
+    <message>
+        <location filename="../src/video_controller.cpp" line="38"/>
+        <location filename="../src/video_controller.cpp" line="43"/>
+        <source>The video process did not finish normally.
+%1</source>
+        <translation>视频进程未正常结束。
+%1</translation>
+    </message>
+    <message>
+        <location filename="../src/video_controller.cpp" line="75"/>
+        <source>Enter a valid HTTP or HTTPS video link.</source>
+        <translation>请输入有效的 HTTP 或 HTTPS 视频链接。</translation>
+    </message>
+    <message>
+        <location filename="../src/video_controller.cpp" line="79"/>
+        <source>Choose the Substream executable and a video configuration.</source>
+        <translation>请选择 Substream 程序和视频配置文件。</translation>
+    </message>
+    <message>
+        <location filename="../src/video_controller.cpp" line="91"/>
+        <source>Choose a browser for cookies.</source>
+        <translation>请选择读取 cookies 的浏览器。</translation>
+    </message>
+    <message>
+        <location filename="../src/video_controller.cpp" line="98"/>
+        <source>Choose an existing cookies file.</source>
+        <translation>请选择有效的 cookies 文件。</translation>
+    </message>
+    <message>
+        <location filename="../src/video_controller.cpp" line="133"/>
+        <location filename="../src/video_controller.cpp" line="145"/>
+        <location filename="../src/video_controller.cpp" line="154"/>
+        <location filename="../src/video_controller.cpp" line="160"/>
+        <source>The video process returned an invalid status message.</source>
+        <translation>视频进程返回的状态消息无效。</translation>
+    </message>
+    <message>
+        <location filename="../src/video_controller.cpp" line="176"/>
+        <source>Cancelling…</source>
+        <translation>正在取消…</translation>
+    </message>
+    <message>
+        <location filename="../src/video_controller.cpp" line="178"/>
+        <source>Starting…</source>
+        <translation>正在启动…</translation>
+    </message>
+    <message>
+        <location filename="../src/video_controller.cpp" line="180"/>
+        <source>Checking available subtitles…</source>
+        <translation>正在检查已有字幕…</translation>
+    </message>
+    <message>
+        <location filename="../src/video_controller.cpp" line="182"/>
+        <source>Downloading video…</source>
+        <translation>正在下载视频…</translation>
+    </message>
+    <message>
+        <location filename="../src/video_controller.cpp" line="184"/>
+        <source>Using existing subtitles…</source>
+        <translation>正在导入已有字幕…</translation>
+    </message>
+    <message>
+        <location filename="../src/video_controller.cpp" line="186"/>
+        <source>Converting audio…</source>
+        <translation>正在转换音频…</translation>
+    </message>
+    <message>
+        <location filename="../src/video_controller.cpp" line="188"/>
+        <source>Recognizing speech…</source>
+        <translation>正在识别语音…</translation>
+    </message>
+    <message>
+        <location filename="../src/video_controller.cpp" line="190"/>
+        <source>Cancelled</source>
+        <translation>已取消</translation>
+    </message>
+    <message>
+        <location filename="../src/video_controller.cpp" line="192"/>
+        <source>Video task failed</source>
+        <translation>视频任务失败</translation>
+    </message>
+    <message>
+        <location filename="../src/video_controller.cpp" line="196"/>
+        <source>Completed · Existing subtitles</source>
+        <translation>已完成 · 已有字幕</translation>
+    </message>
+    <message>
+        <location filename="../src/video_controller.cpp" line="198"/>
+        <source>Completed · Platform auto-captions</source>
+        <translation>已完成 · 平台自动字幕</translation>
+    </message>
+    <message>
+        <location filename="../src/video_controller.cpp" line="199"/>
+        <source>Completed · Speech recognition</source>
+        <translation>已完成 · 语音识别</translation>
+    </message>
+    <message>
+        <location filename="../src/video_controller.cpp" line="201"/>
+        <source>Not started</source>
+        <translation>尚未启动</translation>
+    </message>
+</context>
+<context>
+    <name>VideoPage</name>
+    <message>
+        <location filename="../src/video_page.cpp" line="40"/>
+        <source>Video link</source>
+        <translation>视频链接</translation>
+    </message>
+    <message>
+        <location filename="../src/video_page.cpp" line="43"/>
+        <source>Video configuration</source>
+        <translation>视频配置</translation>
+    </message>
+    <message>
+        <location filename="../src/video_page.cpp" line="44"/>
+        <source>Video configuration (*.toml)</source>
+        <translation>视频配置 (*.toml)</translation>
+    </message>
+    <message>
+        <location filename="../src/video_page.cpp" line="47"/>
+        <source>Use configuration</source>
+        <translation>使用配置文件</translation>
+    </message>
+    <message>
+        <location filename="../src/video_page.cpp" line="48"/>
+        <source>None</source>
+        <translation>不使用</translation>
+    </message>
+    <message>
+        <location filename="../src/video_page.cpp" line="49"/>
+        <location filename="../src/video_page.cpp" line="65"/>
+        <source>Browser</source>
+        <translation>浏览器</translation>
+    </message>
+    <message>
+        <location filename="../src/video_page.cpp" line="50"/>
+        <source>Cookies file</source>
+        <translation>Cookies 文件</translation>
+    </message>
+    <message>
+        <location filename="../src/video_page.cpp" line="52"/>
+        <source>Cookies</source>
+        <translation>Cookies</translation>
+    </message>
+    <message>
+        <location filename="../src/video_page.cpp" line="64"/>
+        <source>Default profile</source>
+        <translation>默认用户配置</translation>
+    </message>
+    <message>
+        <location filename="../src/video_page.cpp" line="66"/>
+        <source>Profile</source>
+        <translation>用户配置</translation>
+    </message>
+    <message>
+        <location filename="../src/video_page.cpp" line="69"/>
+        <source>Cookies files (*.txt);;All files (*)</source>
+        <translation>Cookies 文件 (*.txt);;所有文件 (*)</translation>
+    </message>
+    <message>
+        <location filename="../src/video_page.cpp" line="80"/>
+        <source>Video task</source>
+        <translation>视频任务</translation>
+    </message>
+    <message>
+        <location filename="../src/video_page.cpp" line="97"/>
+        <source>Subtitle preview</source>
+        <translation>字幕预览</translation>
+    </message>
+    <message>
+        <location filename="../src/video_page.cpp" line="109"/>
+        <source>Logs</source>
+        <translation>日志</translation>
+    </message>
+    <message>
+        <location filename="../src/video_page.cpp" line="118"/>
+        <source>Open output folder</source>
+        <translation>打开输出目录</translation>
+    </message>
+    <message>
+        <location filename="../src/video_page.cpp" line="119"/>
+        <source>Get video subtitles</source>
+        <translation>获取视频字幕</translation>
+    </message>
+    <message>
+        <location filename="../src/video_page.cpp" line="120"/>
+        <source>Cancel</source>
+        <translation>取消</translation>
+    </message>
+    <message>
+        <location filename="../src/video_page.cpp" line="189"/>
+        <location filename="../src/video_page.cpp" line="195"/>
+        <source>Cannot read the subtitle document.</source>
+        <translation>无法读取字幕文档。</translation>
     </message>
 </context>
 <context>

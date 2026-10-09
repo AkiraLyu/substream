@@ -2,6 +2,8 @@
 #include "caption_model.h"
 #include "kde_window.h"
 #include "token_file.h"
+#include "video_page.h"
+#include "widgets.h"
 
 #include <QApplication>
 #include <QCheckBox>
@@ -9,7 +11,6 @@
 #include <QCloseEvent>
 #include <QComboBox>
 #include <QDir>
-#include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QGroupBox>
@@ -27,15 +28,10 @@
 #include <QVBoxLayout>
 #include <algorithm>
 
+using Widgets::filePicker;
+using Widgets::label;
+
 namespace {
-QLabel* label(const QString& text = { })
-{
-    auto* result = new QLabel(text);
-    result->setTextFormat(Qt::PlainText);
-    result->setWordWrap(true);
-    result->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    return result;
-}
 
 QSpinBox* number(int minimum, int maximum, int value, const QString& suffix = { })
 {
@@ -44,27 +40,6 @@ QSpinBox* number(int minimum, int maximum, int value, const QString& suffix = { 
     result->setValue(value);
     result->setSuffix(suffix);
     return result;
-}
-
-QWidget* filePicker(QLineEdit* edit, const QString& filter, bool newFile = false)
-{
-    auto* row = new QWidget;
-    auto* layout = new QHBoxLayout(row);
-    layout->setContentsMargins(0, 0, 0, 0);
-    auto* browse = new QPushButton(QCoreApplication::translate("FilePicker", "Browse…"));
-    layout->addWidget(edit, 1);
-    layout->addWidget(browse);
-    QObject::connect(browse, &QPushButton::clicked, row, [edit, filter, newFile, row] {
-        const auto path = newFile
-            ? QFileDialog::getSaveFileName(row,
-                  QCoreApplication::translate("FilePicker", "Choose a token file location"),
-                  edit->text(), filter, nullptr, QFileDialog::DontConfirmOverwrite)
-            : QFileDialog::getOpenFileName(row,
-                  QCoreApplication::translate("FilePicker", "Choose a file"), edit->text(), filter);
-        if (!path.isEmpty())
-            edit->setText(path);
-    });
-    return row;
 }
 
 QString defaultProgram()
@@ -81,20 +56,21 @@ QString defaultProgram()
 
 MainWindow::MainWindow(bool kdeWayland)
 {
-    setWindowTitle(tr("Substream · Live captions"));
+    setWindowTitle(QStringLiteral("Substream"));
     resize(1060, 720);
     QSettings saved;
+    auto* root = new QWidget;
+    setCentralWidget(root);
+    auto* rootLayout = new QVBoxLayout(root);
+    auto* pages = new QTabWidget;
+    rootLayout->addWidget(pages, 1);
     auto* body = new QWidget;
-    setCentralWidget(body);
+    pages->addTab(body, tr("Live captions"));
+    m_video = new VideoPage;
+    pages->addTab(m_video, tr("Video subtitles"));
     auto* layout = new QVBoxLayout(body);
     layout->setContentsMargins(24, 20, 24, 20);
     layout->setSpacing(16);
-    auto* heading = label(tr("Live captions"));
-    auto headingFont = heading->font();
-    headingFont.setPointSize(22);
-    headingFont.setBold(true);
-    heading->setFont(headingFont);
-    layout->addWidget(heading);
     auto* columns = new QHBoxLayout;
     columns->setSpacing(20);
     layout->addLayout(columns, 1);
@@ -135,9 +111,6 @@ MainWindow::MainWindow(bool kdeWayland)
     m_token = new QLineEdit(saved.value("tokenFile", tokenPath).toString());
     browserLayout->addWidget(label(tr("Pairing token file")));
     browserLayout->addWidget(filePicker(m_token, tr("All files (*)"), true));
-    m_videoConfig = new QLineEdit(saved.value("videoConfig").toString());
-    browserLayout->addWidget(label(tr("Video configuration (optional)")));
-    browserLayout->addWidget(filePicker(m_videoConfig, tr("Video configuration (*.toml)")));
     auto* copy = new QPushButton(tr("Copy pairing token"));
     captureLayout->addWidget(browserFields);
     captureLayout->addStretch();
@@ -174,8 +147,6 @@ MainWindow::MainWindow(bool kdeWayland)
     modelLayout->addWidget(filePicker(m_config, tr("Model configuration (*.toml);;All files (*)")));
     modelLayout->addWidget(label(tr("CPU threads")));
     modelLayout->addWidget(m_threads);
-    modelLayout->addWidget(label(tr("Substream executable")));
-    modelLayout->addWidget(filePicker(m_program, tr("All files (*)")));
     modelLayout->addStretch();
     m_settings->addTab(model, tr("Model"));
 
@@ -266,6 +237,20 @@ MainWindow::MainWindow(bool kdeWayland)
     actions->addWidget(m_start);
     actions->addWidget(m_stop);
     layout->addLayout(actions);
+    auto* programRow = new QFormLayout;
+    auto* programPicker = filePicker(m_program, tr("All files (*)"));
+    programRow->addRow(tr("Substream executable"), programPicker);
+    rootLayout->addLayout(programRow);
+    m_video->setProgram(m_program->text().trimmed());
+    connect(m_program, &QLineEdit::textChanged, this,
+        [this](const QString& text) { m_video->setProgram(text.trimmed()); });
+    const auto updateActivity = [this, programPicker] {
+        programPicker->setEnabled(!m_session.active() && !m_video->active());
+        if (m_closing && !m_session.active() && !m_video->active())
+            QTimer::singleShot(0, this, &QWidget::close);
+    };
+    connect(&m_session, &SessionController::changed, this, updateActivity);
+    connect(m_video, &VideoPage::activityChanged, this, updateActivity);
     connect(m_start, &QPushButton::clicked, this, &MainWindow::start);
     connect(m_stop, &QPushButton::clicked, &m_session, &SessionController::stop);
     connect(&m_session, &SessionController::changed, this, &MainWindow::refreshState);
@@ -362,7 +347,7 @@ void MainWindow::start()
     options.config = m_config->text().trimmed();
     options.threads = m_threads->value();
     options.tokenFile = m_token->text().trimmed();
-    options.videoConfig = m_videoConfig->text().trimmed();
+    options.videoConfig = m_video->configuration();
     options.browserOrigin = "chrome-extension://" + m_extension->text().trimmed();
     for (const auto& device : m_devices.devices()) {
         if (device.name == m_device->currentData().toString())
@@ -410,8 +395,6 @@ void MainWindow::refreshState()
         m_deviceRefresh.stop();
         if (!m_session.error().isEmpty() && m_captions)
             m_captions->reset();
-        if (m_closing)
-            QTimer::singleShot(0, this, &QWidget::close);
     }
 }
 
@@ -425,7 +408,7 @@ void MainWindow::saveSettings()
     saved.setValue("threads", m_threads->value());
     saved.setValue("extension", m_extension->text());
     saved.setValue("tokenFile", m_token->text());
-    saved.setValue("videoConfig", m_videoConfig->text());
+    m_video->saveSettings();
     saved.setValue("overlay", m_showOverlay->isChecked());
     saved.setValue("screen", m_screen->currentData());
     saved.setValue("font", m_font->value());
@@ -437,9 +420,10 @@ void MainWindow::saveSettings()
 void MainWindow::closeEvent(QCloseEvent* event)
 {
     saveSettings();
-    if (m_session.active()) {
+    if (m_session.active() || m_video->active()) {
         m_closing = true;
         m_session.stop();
+        m_video->stop();
         event->ignore();
         return;
     }

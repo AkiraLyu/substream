@@ -17,6 +17,7 @@ class QProgressBar;
 class QPushButton;
 class QSpinBox;
 class QTabWidget;
+class VideoPage;
 
 class MainWindow final : public QMainWindow {
     Q_OBJECT
@@ -47,7 +48,7 @@ private:
     QLineEdit* m_program;
     QLineEdit* m_extension;
     QLineEdit* m_token;
-    QLineEdit* m_videoConfig;
+    VideoPage* m_video;
     QSpinBox* m_threads;
     QSpinBox* m_font;
     QSpinBox* m_width;

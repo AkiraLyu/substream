@@ -27,6 +27,8 @@ add_library(desktop-session STATIC
     src/audio_devices.cpp src/audio_devices.h
     src/session_controller.cpp src/session_controller.h
     src/video_controller.cpp src/video_controller.h
+    src/summary_controller.cpp src/summary_controller.h
+    src/json_process.cpp src/json_process.h
 )
 target_link_libraries(desktop-session PUBLIC caption-client)
 target_compile_options(desktop-session PRIVATE -Wall -Wextra -Wpedantic)
@@ -35,12 +37,15 @@ qt_add_executable(substream-overlay
     src/main.cpp
     src/main_window.cpp src/main_window.h
     src/video_page.cpp src/video_page.h
+    src/summary_page.cpp src/summary_page.h
     src/widgets.cpp src/widgets.h
     src/translations.cpp src/translations.h
     src/kde_window.cpp
     src/kde_window.h
 )
 qt_add_resources(substream-overlay ui PREFIX "/" FILES qml/Overlay.qml)
+qt_add_resources(substream-overlay summary-defaults PREFIX "/defaults"
+    BASE "../../configs" FILES ../../configs/summary.example.json)
 target_link_libraries(substream-overlay PRIVATE desktop-session Qt6::Widgets Qt6::Quick LayerShellQt::Interface)
 target_compile_options(substream-overlay PRIVATE -Wall -Wextra -Wpedantic)
 install(TARGETS substream-overlay RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

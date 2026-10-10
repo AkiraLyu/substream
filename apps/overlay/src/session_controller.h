@@ -21,6 +21,7 @@ struct LaunchOptions {
     QString tokenFile;
     QString browserOrigin;
     QString videoConfig;
+    QString summaryConfig;
 };
 
 // Owns capture and recognition processes; the window only edits options and renders state.

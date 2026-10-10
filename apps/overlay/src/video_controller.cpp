@@ -1,74 +1,35 @@
 #include "video_controller.h"
 
 #include <QFileInfo>
-#include <QJsonDocument>
 #include <QUrl>
 
 VideoController::VideoController(QObject* parent)
     : QObject(parent)
 {
-    m_stopDeadline.setSingleShot(true);
-    m_stopDeadline.setInterval(5000);
-    connect(&m_stopDeadline, &QTimer::timeout, this, [this] {
-        fail(tr("Cancellation timed out. The video process was terminated."));
-        m_process.kill();
-    });
-    connect(&m_process, &QProcess::readyReadStandardOutput, this, &VideoController::readOutput);
-    connect(&m_process, &QProcess::readyReadStandardError, this, [this] {
-        const auto text = QString::fromUtf8(m_process.readAllStandardError());
-        m_stderr = (m_stderr + text).right(8192);
-        emit diagnostic(text.trimmed());
-    });
-    connect(&m_process, &QProcess::started, this, [this] {
-        if (m_stopping)
-            m_process.terminate();
-    });
-    connect(&m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
-        if (error == QProcess::FailedToStart) {
-            m_stopDeadline.stop();
-            m_active = false;
-            fail(tr("Cannot start Substream: %1").arg(m_process.errorString()));
-        }
-    });
-    connect(&m_process, &QProcess::finished, this, [this](int code, QProcess::ExitStatus exit) {
-        m_stopDeadline.stop();
-        readOutput();
-        m_active = false;
-        if (m_stage == "completed" && (code != 0 || exit != QProcess::NormalExit))
-            fail(tr("The video process did not finish normally.\n%1").arg(m_stderr.trimmed()));
-        else if (m_stage != "completed" && m_stage != "cancelled" && m_stage != "failed") {
-            if (m_stopping)
+    connect(&m_process, &JsonProcess::eventReceived, this, &VideoController::consumeEvent);
+    connect(&m_process, &JsonProcess::changed, this, &VideoController::changed);
+    connect(&m_process, &JsonProcess::diagnostic, this, &VideoController::diagnostic);
+    connect(&m_process, &JsonProcess::finished, this, [this](bool success, bool cancelled) {
+        if (!m_process.error().isEmpty())
+            fail(m_process.error());
+        else if (!(m_stage == "completed" && success) && m_stage != "failed"
+            && m_stage != "cancelled") {
+            if (cancelled)
                 m_stage = "cancelled";
             else
-                fail(tr("The video process did not finish normally.\n%1").arg(m_stderr.trimmed()));
+                fail(tr("The video process did not return a completed result."));
         }
-        m_stopping = false;
         emit changed();
     });
 }
 
-VideoController::~VideoController()
-{
-    disconnect(&m_process, nullptr, this, nullptr);
-    if (m_process.state() != QProcess::NotRunning) {
-        m_process.terminate();
-        if (!m_process.waitForFinished(5000)) {
-            m_process.kill();
-            m_process.waitForFinished(1000);
-        }
-    }
-}
-
 void VideoController::start(const VideoOptions& options)
 {
-    if (m_active)
+    if (active())
         return;
     m_error.clear();
-    m_stderr.clear();
-    m_buffer.clear();
     m_result = { };
     m_stage.clear();
-    m_stopping = false;
     const QUrl url(options.url, QUrl::StrictMode);
     if (!url.isValid() || url.host().isEmpty() || !url.userInfo().isEmpty()
         || (url.scheme() != "http" && url.scheme() != "https")) {
@@ -101,63 +62,33 @@ void VideoController::start(const VideoOptions& options)
         args << "--cookies-file" << options.cookieSource;
         break;
     }
-    m_active = true;
     m_stage = "queued";
     emit changed();
     m_process.start(options.program, args);
 }
 
-void VideoController::stop()
+void VideoController::consumeEvent(const QJsonObject& event)
 {
-    if (!m_active || m_stopping)
-        return;
-    m_stopping = true;
-    m_stopDeadline.start();
-    if (m_process.state() == QProcess::Running)
-        m_process.terminate();
-    emit changed();
-}
-
-void VideoController::readOutput()
-{
-    const auto data = m_process.readAllStandardOutput();
     if (m_stage == "failed")
         return;
-    m_buffer += data;
-    constexpr qsizetype MaxMessage = 128 * 1024;
-    while (true) {
-        const auto end = m_buffer.indexOf('\n');
-        if (end < 0)
-            break;
-        if (end > MaxMessage) {
-            fail(tr("The video process returned an invalid status message."));
-            return;
-        }
-        QJsonParseError error;
-        const auto document = QJsonDocument::fromJson(m_buffer.left(end), &error);
-        m_buffer.remove(0, end + 1);
-        const auto event = document.object();
-        const auto stage = event.value("stage").toString();
-        static const QStringList stages { "queued", "checking_subtitles", "downloading",
-            "importing_subtitles", "converting", "transcribing", "cancelling", "completed",
-            "cancelled", "failed" };
-        if (error.error != QJsonParseError::NoError || !stages.contains(stage)) {
-            fail(tr("The video process returned an invalid status message."));
-            return;
-        }
-        m_stage = stage;
-        m_result = event.value("result").toObject();
-        m_error = event.value("error").toString();
-        if (stage == "completed"
-            && (m_result.value("directory").toString().isEmpty()
-                || m_result.value("document").toString().isEmpty())) {
-            fail(tr("The video process returned an invalid status message."));
-            return;
-        }
-        emit changed();
-    }
-    if (m_buffer.size() > MaxMessage)
+    const auto stage = event.value("stage").toString();
+    static const QStringList stages { "queued", "checking_subtitles", "downloading",
+        "importing_subtitles", "converting", "transcribing", "cancelling", "completed", "cancelled",
+        "failed" };
+    if (!stages.contains(stage)) {
         fail(tr("The video process returned an invalid status message."));
+        return;
+    }
+    m_stage = stage;
+    m_result = event.value("result").toObject();
+    m_error = event.value("error").toString();
+    if (stage == "completed"
+        && (m_result.value("directory").toString().isEmpty()
+            || m_result.value("document").toString().isEmpty())) {
+        fail(tr("The video process returned an invalid status message."));
+        return;
+    }
+    emit changed();
 }
 
 void VideoController::fail(const QString& message)
@@ -165,14 +96,14 @@ void VideoController::fail(const QString& message)
     m_error = message;
     m_stage = "failed";
     m_result = { };
-    if (m_active)
-        stop();
+    if (active())
+        m_process.fail(message);
     emit changed();
 }
 
 QString VideoController::status() const
 {
-    if ((m_stopping && m_active) || m_stage == "cancelling")
+    if ((stopping() && active()) || m_stage == "cancelling")
         return tr("Cancelling…");
     if (m_stage == "queued")
         return tr("Starting…");

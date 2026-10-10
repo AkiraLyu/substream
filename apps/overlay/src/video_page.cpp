@@ -116,9 +116,10 @@ VideoPage::VideoPage(QWidget* parent)
     auto* actions = new QHBoxLayout;
     actions->addStretch();
     m_open = new QPushButton(tr("Open output folder"));
+    m_summarize = new QPushButton(tr("AI summary"));
     m_start = new QPushButton(tr("Get video subtitles"));
     m_cancel = new QPushButton(tr("Cancel"));
-    for (auto* button : { m_open, m_start, m_cancel }) {
+    for (auto* button : { m_open, m_summarize, m_start, m_cancel }) {
         button->setMinimumHeight(36);
         actions->addWidget(button);
     }
@@ -128,6 +129,8 @@ VideoPage::VideoPage(QWidget* parent)
             QUrl::fromLocalFile(m_controller.result().value("directory").toString()));
     });
     connect(m_start, &QPushButton::clicked, this, &VideoPage::start);
+    connect(m_summarize, &QPushButton::clicked, this,
+        [this] { emit summarizeRequested(m_controller.result().value("document").toString()); });
     connect(m_cancel, &QPushButton::clicked, &m_controller, &VideoController::stop);
     connect(&m_controller, &VideoController::changed, this, &VideoPage::refresh);
     connect(&m_controller, &VideoController::diagnostic, this, [this](const QString& text) {
@@ -173,6 +176,7 @@ void VideoPage::refresh()
     const auto result = m_controller.result();
     m_output->setText(result.value("directory").toString());
     m_open->setEnabled(!active && !m_output->text().isEmpty());
+    m_summarize->setEnabled(!active && !result.value("document").toString().isEmpty());
     if (!active && !result.isEmpty())
         loadResult();
     emit activityChanged();

@@ -1,9 +1,6 @@
 #pragma once
 
-#include <QJsonObject>
-#include <QObject>
-#include <QProcess>
-#include <QTimer>
+#include "json_process.h"
 
 struct VideoOptions {
     QString program;
@@ -19,11 +16,10 @@ class VideoController final : public QObject {
     Q_OBJECT
 public:
     explicit VideoController(QObject* parent = nullptr);
-    ~VideoController() override;
     void start(const VideoOptions& options);
-    void stop();
-    bool active() const { return m_active; }
-    bool stopping() const { return m_stopping; }
+    void stop() { m_process.stop(); }
+    bool active() const { return m_process.active(); }
+    bool stopping() const { return m_process.stopping(); }
     QString status() const;
     QString error() const { return m_error; }
     QJsonObject result() const { return m_result; }
@@ -33,15 +29,10 @@ signals:
     void diagnostic(const QString& text);
 
 private:
-    void readOutput();
+    void consumeEvent(const QJsonObject& event);
     void fail(const QString& message);
-    QProcess m_process;
-    QTimer m_stopDeadline;
-    QByteArray m_buffer;
+    JsonProcess m_process;
     QString m_stage;
     QString m_error;
-    QString m_stderr;
     QJsonObject m_result;
-    bool m_active = false;
-    bool m_stopping = false;
 };

@@ -23,6 +23,7 @@ public:
 
 signals:
     void activityChanged();
+    void summarizeRequested(const QString& document);
 
 private:
     void start();
@@ -48,4 +49,5 @@ private:
     QPushButton* m_start;
     QPushButton* m_cancel;
     QPushButton* m_open;
+    QPushButton* m_summarize;
 };

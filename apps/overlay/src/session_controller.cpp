@@ -232,6 +232,8 @@ void SessionController::launchEngine()
              << m_options.browserOrigin;
         if (!m_options.videoConfig.isEmpty())
             args << "--video-config" << m_options.videoConfig;
+        if (!m_options.summaryConfig.isEmpty())
+            args << "--summary-config" << m_options.summaryConfig;
     }
     m_engine.start(m_options.program, args);
 }

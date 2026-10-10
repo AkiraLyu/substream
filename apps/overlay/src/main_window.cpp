@@ -1,6 +1,7 @@
 #include "main_window.h"
 #include "caption_model.h"
 #include "kde_window.h"
+#include "summary_page.h"
 #include "token_file.h"
 #include "video_page.h"
 #include "widgets.h"
@@ -68,6 +69,12 @@ MainWindow::MainWindow(bool kdeWayland)
     pages->addTab(body, tr("Live captions"));
     m_video = new VideoPage;
     pages->addTab(m_video, tr("Video subtitles"));
+    m_summary = new SummaryPage;
+    pages->addTab(m_summary, tr("AI summary"));
+    connect(m_video, &VideoPage::summarizeRequested, this, [this, pages](const QString& path) {
+        m_summary->setDocument(path);
+        pages->setCurrentWidget(m_summary);
+    });
     auto* layout = new QVBoxLayout(body);
     layout->setContentsMargins(24, 20, 24, 20);
     layout->setSpacing(16);
@@ -242,15 +249,20 @@ MainWindow::MainWindow(bool kdeWayland)
     programRow->addRow(tr("Substream executable"), programPicker);
     rootLayout->addLayout(programRow);
     m_video->setProgram(m_program->text().trimmed());
-    connect(m_program, &QLineEdit::textChanged, this,
-        [this](const QString& text) { m_video->setProgram(text.trimmed()); });
+    m_summary->setProgram(m_program->text().trimmed());
+    connect(m_program, &QLineEdit::textChanged, this, [this](const QString& text) {
+        m_video->setProgram(text.trimmed());
+        m_summary->setProgram(text.trimmed());
+    });
     const auto updateActivity = [this, programPicker] {
-        programPicker->setEnabled(!m_session.active() && !m_video->active());
-        if (m_closing && !m_session.active() && !m_video->active())
+        programPicker->setEnabled(
+            !m_session.active() && !m_video->active() && !m_summary->active());
+        if (m_closing && !m_session.active() && !m_video->active() && !m_summary->active())
             QTimer::singleShot(0, this, &QWidget::close);
     };
     connect(&m_session, &SessionController::changed, this, updateActivity);
     connect(m_video, &VideoPage::activityChanged, this, updateActivity);
+    connect(m_summary, &SummaryPage::activityChanged, this, updateActivity);
     connect(m_start, &QPushButton::clicked, this, &MainWindow::start);
     connect(m_stop, &QPushButton::clicked, &m_session, &SessionController::stop);
     connect(&m_session, &SessionController::changed, this, &MainWindow::refreshState);
@@ -348,6 +360,7 @@ void MainWindow::start()
     options.threads = m_threads->value();
     options.tokenFile = m_token->text().trimmed();
     options.videoConfig = m_video->configuration();
+    options.summaryConfig = m_summary->configuration();
     options.browserOrigin = "chrome-extension://" + m_extension->text().trimmed();
     for (const auto& device : m_devices.devices()) {
         if (device.name == m_device->currentData().toString())
@@ -420,10 +433,11 @@ void MainWindow::saveSettings()
 void MainWindow::closeEvent(QCloseEvent* event)
 {
     saveSettings();
-    if (m_session.active() || m_video->active()) {
+    if (m_session.active() || m_video->active() || m_summary->active()) {
         m_closing = true;
         m_session.stop();
         m_video->stop();
+        m_summary->stop();
         event->ignore();
         return;
     }

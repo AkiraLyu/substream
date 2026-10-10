@@ -62,7 +62,19 @@ install -Dm755 target/release/substream "$HOME/.local/bin/substream"
 
 右侧显示当前阶段，完成后显示字幕来源、文本预览和输出目录。“打开输出目录”可查看视频、SRT、WebVTT 和 JSON 文件。点击“取消”或关闭窗口会停止未完成的任务并清理临时文件。
 
+任务完成后，点击“AI 总结”可将字幕文档带入总结页面。
+
 该页面直接运行本地视频任务，不需要浏览器扩展或配对令牌。页面中的 cookies 选择仅覆盖直接启动的任务；浏览器服务始终使用启动时读取的视频配置。两种入口共用相同的字幕选择与导出流程，规则见 [网页视频字幕](../README.md#网页视频字幕)。
+
+## AI 总结
+
+在“接口”中填写完整的 Chat Completions 地址、API 密钥和模型。“提示词”中可编辑系统提示词和用户提示词，并插入字幕、标题和来源链接。“高级”中可设置密钥环境变量、输入长度和 JSON 请求参数。
+
+选择视频任务生成的 `document.json`，点击“生成总结”。成功后右侧显示 Markdown，点击“保存 Markdown”导出。生成期间可以取消；失败后可修改设置并重试。总结不会随下载自动开始。配置示例和限制见 [AI 总结](summary.md)。
+
+点击“保存设置”或“生成总结”时保存配置，关闭窗口不会自动保存编辑内容。配置通常位于 `~/.config/Substream/substream-overlay/summary.json`，文件仅允许当前用户读写。密钥不写入通用窗口设置，也不放入命令行参数。
+
+保存总结配置后启动浏览器服务，即可启用 [总结接口](protocol.md#ai-总结)。服务读取启动时的配置，修改后需重新启动服务。
 
 ## 悬浮字幕
 
@@ -90,7 +102,7 @@ pw-cat --record --raw --rate 16000 --channels 1 --format s16 --latency 20ms \
 
 ## 扩展与检查
 
-`MainWindow` 组织页面与共享程序路径，`SessionController` 管理实时采集进程，`AudioDevices` 读取设备列表。`VideoPage` 提供视频表单和结果预览，`VideoController` 运行视频命令并读取逐行 JSON 状态。`CaptionModel` 处理实时字幕状态，`EventSource` 接收实时 JSON 消息，`KdeWindow` 负责 KDE 窗口设置。
+`MainWindow` 组织页面与共享程序路径，`SessionController` 管理实时采集进程，`AudioDevices` 读取设备列表。`VideoPage` 和 `SummaryPage` 分别负责视频任务与总结界面，对应控制器通过 `JsonProcess` 运行命令、读取 JSON 和处理取消。`CaptionModel` 处理实时字幕状态，`EventSource` 接收实时 JSON 消息，`KdeWindow` 负责 KDE 窗口设置。
 
 GNOME Shell 扩展可使用自身的网络和界面组件接入 [只读字幕协议](protocol.md#桌面字幕订阅)，按会话编号替换字幕，并按字幕年龄控制显示时长。协议不要求继承 C++ 类，也不依赖 Qt。
 

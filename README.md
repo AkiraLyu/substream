@@ -2,7 +2,7 @@
 
 Substream 是面向 Linux 的本地语音识别与字幕工具，支持系统音频和浏览器标签页的实时字幕，以及本地文件、网页视频的完整字幕导出。
 
-实时识别使用 sherpa-onnx，文件识别使用 whisper.cpp，网页视频通过 yt-dlp 下载。提供命令行、本地服务、Chromium 扩展、桌面设置窗口和 KDE Wayland 悬浮字幕。GNOME 显示端、翻译和 AI 总结尚未实现。
+实时识别使用 sherpa-onnx，文件识别使用 whisper.cpp，网页视频通过 yt-dlp 下载。提供命令行、本地服务、Chromium 扩展、桌面设置窗口和 KDE Wayland 悬浮字幕。视频字幕可通过兼容 OpenAI Chat Completions 的接口生成 AI 总结。GNOME 显示端和翻译尚未实现。
 
 技术选择和模块职责见 [架构设计](docs/architecture.md)，客户端接入方式见 [本地协议](docs/protocol.md)。
 
@@ -103,7 +103,7 @@ cargo run -p substream --release -- video 'https://example.com/video' \
 
 `language` 指定字幕和识别语言。设为 `auto` 时，在同类字幕中优先匹配视频原始语言，其次选择英语，再选择其他可用语言。指定语言时只使用匹配的字幕，包括同一语言的地区变体。字幕下载或解析失败会报告错误，不会静默改为语音识别。当前支持 yt-dlp 提供的 SRT、WebVTT、TTML、ASS 和 SSA 字幕；不检测画面内嵌文字。
 
-每个任务创建独立目录，保存下载的视频、`subtitles.srt`、`subtitles.vtt` 和 `document.json`。JSON 文档包含来源链接、标题、语言、字幕来源和段落时间，可作为后续总结功能的输入。已有字幕出现重叠时，按时间边界合并同时显示的文字。命令按行输出 JSON 任务状态，完成状态包含结果路径。重复下载不会覆盖已有结果。
+每个任务创建独立目录，保存下载的视频、`subtitles.srt`、`subtitles.vtt` 和 `document.json`。JSON 文档包含来源链接、标题、语言、字幕来源和段落时间，可直接用于 AI 总结。已有字幕出现重叠时，按时间边界合并同时显示的文字。命令按行输出 JSON 任务状态，完成状态包含结果路径。重复下载不会覆盖已有结果。
 
 按 Ctrl+C 可取消任务。`timeout_secs` 分别限制字幕检查、下载、音频转换和识别时间；取消、超时或失败会结束子进程并删除任务目录，成功后删除中间文件。每次请求处理一个视频，纯播放列表链接只取第一项，不支持直播。
 
@@ -118,7 +118,20 @@ cargo run -p substream --release -- serve \
 
 令牌需先用 `token` 命令创建。同时使用实时字幕时，再加上 `--config` 并以 `--features sherpa` 构建。桌面程序启动浏览器服务时，使用“视频字幕”页面选中的视频配置。
 
-服务提供提交、查询、取消和读取字幕文档的 [HTTP 接口](docs/protocol.md#视频任务)。扩展的 `video.ts` 和后台消息接口可直接调用这些功能；当前弹窗尚未提供视频下载按钮，也未接入 AI 模型。
+服务提供提交、查询、取消和读取字幕文档的 [HTTP 接口](docs/protocol.md#视频任务)。扩展的 `video.ts` 和后台消息接口可直接调用这些功能；当前扩展弹窗仅提供实时字幕操作。
+
+## AI 总结
+
+视频任务完成后，点击“AI 总结”，填写接口地址、API 密钥和模型，再点击“生成总结”。也可直接在“AI 总结”页面选择已有的 `document.json`。系统提示词和用户提示词均可编辑，结果可预览并保存为 Markdown。
+
+命令行使用独立的 [总结配置](configs/summary.example.json)：
+
+```bash
+cargo run -p substream --release -- summarize /path/to/document.json \
+  --config /path/to/summary.json --output summary.md
+```
+
+配置支持本地或远程的 Chat Completions 接口，以及温度、输出长度等请求参数。只有主动生成总结时才向配置的接口发送字幕。密钥配置、提示词变量和长度限制见 [AI 总结](docs/summary.md)，客户端接入方式见 [总结接口](docs/protocol.md#ai-总结)。
 
 ## 开发
 
@@ -140,7 +153,7 @@ npm test
 cargo test -p substream --test offline --test video -- --ignored
 ```
 
-这些测试使用真实 FFmpeg、yt-dlp 和固定识别结果，验证完整音轨、字幕内容与时间。视频来自本地测试服务，Cookie 来自临时 Firefox 资料目录，不使用个人登录数据，也不评估模型准确率。CI 运行上述测试，并单独构建 `sherpa` 功能以检查原生库链接。
+这些测试使用真实 FFmpeg、yt-dlp 和固定识别结果，验证完整音轨、字幕内容与时间。视频来自本地测试服务，Cookie 来自临时 Firefox 资料目录。总结测试使用本地 HTTP 服务检查请求和结果，不调用付费模型，也不评估模型生成质量。CI 运行上述测试，并单独构建 `sherpa` 功能以检查原生库链接。
 
 测试应围绕音频完整性、字幕内容与时间、协议兼容和失败处理。优先通过公开接口检查结果，避免固定内部调用顺序、队列容量或字幕更新次数。
 
@@ -152,10 +165,10 @@ cargo test -p substream --test offline --test video -- --ignored
 | --- | --- |
 | `crates/core` | 音频与字幕数据、识别接口、字幕更新和导出 |
 | `crates/protocol` | JSON 消息和二进制音频格式 |
-| `crates/backends` | 识别引擎、FFmpeg、yt-dlp 和子进程管理 |
+| `crates/backends` | 识别引擎、FFmpeg、yt-dlp、LLM 客户端和子进程管理 |
 | `apps/substream` | 命令行、配置、认证和本地服务 |
 | `apps/overlay` | 参数界面、设备发现、进程控制和 KDE 悬浮字幕 |
-| `browser/extension` | 标签页音频捕获、字幕预览和视频任务接口 |
+| `browser/extension` | 标签页音频捕获、字幕预览、视频任务和总结接口 |
 | `fixtures` | 协议和识别结果的共用样本 |
 
 接入识别引擎时，实现 `StreamingRecognizer` 或 `BatchRecognizer`，再在应用的配置入口注册。核心模块不依赖具体引擎或网络库。

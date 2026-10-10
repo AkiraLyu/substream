@@ -186,7 +186,7 @@ Rust 和 TypeScript 共用 [二进制样本](../fixtures/audio-v1.bin) 检查兼
 }
 ```
 
-时间以下载视频的音轨起点为零，与浏览器的播放进度无关。文档可作为翻译、总结等功能的输入，当前服务不调用 AI 总结模型。
+时间以下载视频的音轨起点为零，与浏览器的播放进度无关。总结接口使用这份文档作为输入。
 
 服务同一时间只接受一个视频任务，忙时返回 `409 video_busy`。取消为异步操作，应继续查询到 `cancelled`；如果结果已保存，则可能返回 `completed`。关闭页面或断开请求不会取消任务，停止服务会取消未完成的任务。
 
@@ -204,3 +204,38 @@ const response = await chrome.runtime.sendMessage({
 ```
 
 其他操作的 `action` 为 `{kind: "status" | "cancel" | "document", id}`。成功返回 `{ok: true, data}`，失败返回 `{ok: false, error}`。后台只接收本扩展的消息，普通网页不能直接调用此接口。
+
+## AI 总结
+
+服务在视频配置之外，通过 `--summary-config /path/to/summary.json` 启用总结。`POST /v1/video/jobs/{id}/summary` 对已完成任务生成总结，使用相同的令牌认证和来源检查。请求体为 `{}` 时使用服务端配置的提示词，也可覆盖本次提示词：
+
+```json
+{
+  "system_prompt": "请根据字幕准确总结，不要补充原文没有的信息。",
+  "user_prompt": "请用中文总结《{{title}}》的主要观点，附相关时间。\n\n{{transcript}}"
+}
+```
+
+两项都可省略。请求不能覆盖接口地址、密钥、模型或生成参数；完整请求体最多 16 KiB。提示词变量见 [配置说明](summary.md#提示词)。成功时返回 `200`：
+
+```json
+{
+  "schema_version": 1,
+  "source": {"url": "https://example.com/video", "id": "video-id", "title": "视频标题"},
+  "model": "configured-model",
+  "markdown": "## 概览\n\n视频主要讨论……"
+}
+```
+
+请求保持连接直至生成完成或超时，结果不自动写入视频目录。客户端应将文本作为 Markdown 或纯文本展示，不执行其中的 HTML 或自动加载外部资源。重复请求会重新调用模型。关闭客户端不等于取消服务端请求；停止服务会中止正在等待的总结。
+
+| 状态与错误代码 | 含义 |
+| --- | --- |
+| `404 job_not_found` | 任务记录不存在 |
+| `409 not_complete` | 视频字幕尚未完成 |
+| `409 summary_busy` | 已有总结请求正在处理 |
+| `503 summary_disabled` | 未提供总结配置 |
+| `503 shutting_down` | 服务正在停止 |
+| `502 summary_failed` | 配置、输入、模型响应或网络请求出错，原因在 `message` 中 |
+
+扩展页面可调用 `video.ts` 的 `summarizeVideo(token, id, prompts, signal)`，返回 `SummaryResult`。`prompts` 和 `signal` 可省略。调用页面应在生成期间保持打开；该操作不经过用于短请求的后台消息接口。

@@ -31,7 +31,7 @@ export interface VideoJob {
 
 export type SubtitleSource = "provided" | "automatic" | "recognition";
 
-/** Source and timed text consumed by a future summarization feature. */
+/** Source and timed text shared by subtitle export and summarization. */
 export interface VideoDocument {
   schema_version: 1;
   source: { url: string; id: string; title: string };
@@ -44,18 +44,36 @@ export interface VideoDocument {
   };
 }
 
+export interface SummaryRequest {
+  system_prompt?: string;
+  user_prompt?: string;
+}
+
+export interface SummaryResult {
+  schema_version: 1;
+  source: VideoDocument["source"];
+  model: string;
+  markdown: string;
+}
+
 export type VideoAction =
   { kind: "submit"; url: string } | { kind: "status" | "cancel" | "document"; id: string };
 
 const endpoint = "http://127.0.0.1:9743/v1/video/jobs";
 
-async function request<T>(token: string, path: string, method: string, body?: object): Promise<T> {
+async function request<T>(
+  token: string,
+  path: string,
+  method: string,
+  body?: object,
+  signal = AbortSignal.timeout(10_000),
+): Promise<T> {
   validateToken(token);
   const response = await fetch(endpoint + path, {
     method,
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     ...(body ? { body: JSON.stringify(body) } : {}),
-    signal: AbortSignal.timeout(10_000),
+    signal,
     credentials: "omit",
     cache: "no-store",
   });
@@ -92,6 +110,16 @@ export function cancelVideoJob(token: string, id: string): Promise<VideoJob> {
 
 export function getVideoDocument(token: string, id: string): Promise<VideoDocument> {
   return request(token, `${jobPath(id)}/document`, "GET");
+}
+
+/** Call from an extension page that remains open while the model generates its answer. */
+export function summarizeVideo(
+  token: string,
+  id: string,
+  prompts: SummaryRequest = {},
+  signal = AbortSignal.timeout(3_600_000),
+): Promise<SummaryResult> {
+  return request(token, `${jobPath(id)}/summary`, "POST", prompts, signal);
 }
 
 export async function handleVideoAction(

@@ -83,6 +83,7 @@ async fn video_jobs_require_pairing_and_can_be_cancelled_retried_and_stopped() {
     let (shutdown, receiver) = watch::channel(false);
     let app = router(
         ServerConfig {
+            summary: None,
             address: "127.0.0.1:0".parse().unwrap(),
             token: Token::read(&token_path).unwrap(),
             allowed_origins: vec![origin.into()],

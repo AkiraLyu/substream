@@ -1,6 +1,5 @@
 use std::{
     collections::VecDeque,
-    io::Read,
     sync::{Arc, Mutex},
 };
 
@@ -13,12 +12,16 @@ use axum::{
     routing::{get, post},
 };
 use substream_backends::{download::validate_video_url, process::Cancellation};
-use substream_protocol::video::{VideoDocument, VideoJob, VideoRequest, VideoStage};
+use substream_protocol::{
+    summary::{SummaryRequest, SummaryResult},
+    video::{VideoDocument, VideoJob, VideoRequest, VideoStage},
+};
 use tokio::sync::{Semaphore, watch};
 
 use crate::{
     auth::Token,
-    video::{VideoConfig, new_job_id, run_video},
+    summary::{SummaryConfig, summarize},
+    video::{VideoConfig, new_job_id, read_document, run_video},
 };
 
 #[derive(Clone)]
@@ -36,8 +39,10 @@ struct JobRecord {
 #[derive(Clone)]
 struct Jobs {
     config: Option<VideoConfig>,
+    summary: Option<SummaryConfig>,
     records: Arc<Mutex<VecDeque<JobRecord>>>,
     slot: Arc<Semaphore>,
+    summary_slot: Arc<Semaphore>,
     shutdown: watch::Receiver<bool>,
 }
 
@@ -55,6 +60,7 @@ impl IntoResponse for ApiError {
 
 pub(crate) fn router(
     config: Option<VideoConfig>,
+    summary_config: Option<SummaryConfig>,
     token: Token,
     origins: Vec<String>,
     shutdown: watch::Receiver<bool>,
@@ -69,6 +75,10 @@ pub(crate) fn router(
             "/v1/video/jobs/{id}/document",
             get(document).options(preflight),
         )
+        .route(
+            "/v1/video/jobs/{id}/summary",
+            post(summary).options(preflight),
+        )
         .layer(DefaultBodyLimit::max(16 * 1024))
         .route_layer(middleware::from_fn_with_state(
             Access { token, origins },
@@ -76,6 +86,8 @@ pub(crate) fn router(
         ))
         .with_state(Jobs {
             config,
+            summary: summary_config,
+            summary_slot: Arc::new(Semaphore::new(1)),
             records: Arc::default(),
             slot: Arc::new(Semaphore::new(1)),
             shutdown,
@@ -282,7 +294,11 @@ async fn document(
     State(jobs): State<Jobs>,
     Path(id): Path<String>,
 ) -> Result<Json<VideoDocument>, ApiError> {
-    let record = jobs.find(&id)?;
+    Ok(Json(read_job_document(&jobs, &id).await?))
+}
+
+async fn read_job_document(jobs: &Jobs, id: &str) -> Result<VideoDocument, ApiError> {
+    let record = jobs.find(id)?;
     let path = record
         .job
         .lock()
@@ -297,31 +313,55 @@ async fn document(
                 "the video document is not ready".into(),
             )
         })?;
-    let document = tokio::task::spawn_blocking(move || -> anyhow::Result<VideoDocument> {
-        let mut bytes = Vec::new();
-        std::fs::File::open(path)?
-            .take(32 * 1024 * 1024 + 1)
-            .read_to_end(&mut bytes)?;
-        anyhow::ensure!(
-            bytes.len() <= 32 * 1024 * 1024,
-            "video document exceeds 32 MiB"
-        );
-        Ok(serde_json::from_slice(&bytes)?)
-    })
-    .await
-    .map_err(|e| {
+    tokio::task::spawn_blocking(move || read_document(&path))
+        .await
+        .map_err(|e| {
+            ApiError(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "document_failed",
+                e.to_string(),
+            )
+        })?
+        .map_err(|e| {
+            ApiError(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "document_failed",
+                e.to_string(),
+            )
+        })
+}
+
+async fn summary(
+    State(jobs): State<Jobs>,
+    Path(id): Path<String>,
+    Json(request): Json<SummaryRequest>,
+) -> Result<Json<SummaryResult>, ApiError> {
+    let config = jobs.summary.as_ref().ok_or_else(|| {
         ApiError(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "document_failed",
-            e.to_string(),
-        )
-    })?
-    .map_err(|e| {
-        ApiError(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "document_failed",
-            e.to_string(),
+            StatusCode::SERVICE_UNAVAILABLE,
+            "summary_disabled",
+            "start the service with --summary-config to enable summaries".into(),
         )
     })?;
-    Ok(Json(document))
+    let mut shutdown = jobs.shutdown.clone();
+    if *shutdown.borrow() {
+        return Err(ApiError(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "shutting_down",
+            "the service is stopping".into(),
+        ));
+    }
+    let _permit = jobs.summary_slot.try_acquire().map_err(|_| {
+        ApiError(
+            StatusCode::CONFLICT,
+            "summary_busy",
+            "another summary is active".into(),
+        )
+    })?;
+    let document = read_job_document(&jobs, &id).await?;
+    tokio::select! {
+        result = summarize(config, &document, &request) => result.map(Json)
+            .map_err(|e| ApiError(StatusCode::BAD_GATEWAY, "summary_failed", format!("{e:#}"))),
+        _ = shutdown.changed() => Err(ApiError(StatusCode::SERVICE_UNAVAILABLE, "shutting_down", "summary cancelled because the service is stopping".into())),
+    }
 }

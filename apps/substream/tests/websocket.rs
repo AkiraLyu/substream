@@ -42,6 +42,7 @@ impl TestServer {
         let (shutdown, receiver) = watch::channel(false);
         let app = router(
             ServerConfig {
+                summary: None,
                 address,
                 token: Token::read(&path).unwrap(),
                 allowed_origins: vec!["chrome-extension://test".into()],

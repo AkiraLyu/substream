@@ -12,7 +12,8 @@ use substream::{
     auth::{Token, create_token},
     config::RecognizerConfig,
     server::{ServerConfig, serve},
-    video::{VideoConfig, new_job_id, run_video},
+    summary::{SummaryConfig, summarize},
+    video::{VideoConfig, new_job_id, read_document, run_video},
 };
 use substream_backends::{
     batch::{BatchRecognizer, Ffmpeg, WhisperCpp},
@@ -22,6 +23,7 @@ use substream_backends::{
 use substream_core::{pipeline::LivePipeline, subtitle, transcript::Transcript};
 use substream_protocol::{
     ServerMessage, VERSION,
+    summary::SummaryRequest,
     video::{VideoJob, VideoStage},
 };
 
@@ -56,6 +58,9 @@ enum Command {
         /// Enable complete video jobs using a local configuration.
         #[arg(long)]
         video_config: Option<PathBuf>,
+        /// Enable AI summaries with a local LLM configuration.
+        #[arg(long)]
+        summary_config: Option<PathBuf>,
     },
     /// Download one video and generate SRT, VTT, and a timestamped JSON document.
     Video {
@@ -71,6 +76,15 @@ enum Command {
         /// Download anonymously, ignoring any configured cookies source.
         #[arg(long)]
         no_cookies: bool,
+    },
+    /// Summarize a video document using a configured Chat Completions endpoint.
+    Summarize {
+        document: PathBuf,
+        #[arg(long)]
+        config: PathBuf,
+        /// Save Markdown without overwriting; omit to emit a JSON result.
+        #[arg(long)]
+        output: Option<PathBuf>,
     },
     /// Create a private 256-bit authentication token file without overwriting.
     Token {
@@ -151,6 +165,7 @@ async fn main() -> Result<()> {
             config,
             threads,
             video_config,
+            summary_config,
         } => {
             anyhow::ensure!(
                 config.is_some() || video_config.is_some(),
@@ -167,6 +182,10 @@ async fn main() -> Result<()> {
                     })
                     .transpose()?,
                 video: video_config.as_deref().map(VideoConfig::load).transpose()?,
+                summary: summary_config
+                    .as_deref()
+                    .map(SummaryConfig::load)
+                    .transpose()?,
             })
             .await
         }
@@ -186,6 +205,31 @@ async fn main() -> Result<()> {
                 config.cookies_from_browser = cookies_from_browser;
             }
             video(config, url).await
+        }
+        Command::Summarize {
+            document,
+            config,
+            output,
+        } => {
+            if let Some(path) = &output {
+                anyhow::ensure!(!path.try_exists()?, "summary output already exists");
+            }
+            let config = SummaryConfig::load(&config)?;
+            let document = read_document(&document)?;
+            let mut terminate =
+                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+            let request = SummaryRequest::default();
+            let result = tokio::select! {
+                result = summarize(&config, &document, &request) => result?,
+                _ = tokio::signal::ctrl_c() => anyhow::bail!("summary cancelled"),
+                _ = terminate.recv() => anyhow::bail!("summary cancelled"),
+            };
+            if let Some(path) = output {
+                write_output(&result.markdown, Some(path))
+            } else {
+                let text = serde_json::to_string(&result)? + "\n";
+                write_output(&text, None)
+            }
         }
         Command::Transcribe {
             input,
@@ -292,7 +336,11 @@ fn write_transcript(transcript: &Transcript, output: Output) -> Result<()> {
             NonZeroUsize::new(42).expect("positive width"),
         )?,
     };
-    if let Some(path) = output.output {
+    write_output(&contents, output.output)
+}
+
+fn write_output(contents: &str, path: Option<PathBuf>) -> Result<()> {
+    if let Some(path) = path {
         let parent = path
             .parent()
             .filter(|p| !p.as_os_str().is_empty())

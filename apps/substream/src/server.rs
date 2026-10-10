@@ -51,6 +51,7 @@ pub struct ServerConfig {
     pub allowed_origins: Vec<String>,
     pub recognizer: Option<RecognizerFactory>,
     pub video: Option<crate::video::VideoConfig>,
+    pub summary: Option<crate::summary::SummaryConfig>,
 }
 
 pub async fn serve(config: ServerConfig) -> Result<()> {
@@ -80,6 +81,7 @@ pub async fn serve(config: ServerConfig) -> Result<()> {
 pub fn router(config: ServerConfig, shutdown: watch::Receiver<bool>) -> Router {
     let video_routes = crate::video_jobs::router(
         config.video,
+        config.summary,
         config.token.clone(),
         config.allowed_origins.clone(),
         shutdown.clone(),

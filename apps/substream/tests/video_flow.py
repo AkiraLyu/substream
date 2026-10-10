@@ -53,6 +53,22 @@ def exercise(root, binary):
             b'</video></html>')
 
     class MediaHandler(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            assert self.path == "/v1/chat/completions"
+            assert self.headers.get("Authorization") == "Bearer summary-fixture"
+            assert self.headers.get("Cookie") is None
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            assert body["model"] == "fixture-model"
+            assert "これは字幕のテストです。" in body["messages"][1]["content"]
+            assert body["messages"][0]["content"] == "Write brief notes."
+            response = json.dumps({"choices": [{"finish_reason": "stop",
+                "message": {"content": "# Notes\n\nVideo summary at [00:00:01]."}}]}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(response)))
+            self.end_headers()
+            self.wfile.write(response)
+
         def do_GET(self):
             if self.headers.get("Cookie") != "session=fixture-login":
                 self.send_error(403)
@@ -102,6 +118,11 @@ pathlib.Path(option('--output-file') + '.json').write_bytes(result)
         f'cookies_from_browser = {json.dumps("firefox:" + str(profile))}\n'
         'timeout_secs = 30\n'
     )
+    summary_config = root / "summary.json"
+    defaults = json.loads((Path(__file__).resolve().parents[3] / "configs/summary.example.json").read_text())
+    defaults.update(endpoint=f"http://127.0.0.1:{media_server.server_port}/v1/chat/completions",
+                    api_key="summary-fixture", model="fixture-model", system_prompt="Write brief notes.")
+    summary_config.write_text(json.dumps(defaults))
     token_file = root / "token"
     run(binary, "token", "--output", str(token_file))
     token = token_file.read_text().strip()
@@ -111,7 +132,8 @@ pathlib.Path(option('--output-file') + '.json').write_bytes(result)
         address = f"127.0.0.1:{reservation.getsockname()[1]}"
     service = subprocess.Popen(
         [binary, "serve", "--listen", address, "--video-config", str(config),
-         "--token-file", str(token_file), "--allow-origin", origin],
+         "--token-file", str(token_file), "--allow-origin", origin,
+         "--summary-config", str(summary_config)],
         stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
         env={**os.environ, "RUST_LOG": "info", "NO_COLOR": "1"},
     )
@@ -144,6 +166,13 @@ pathlib.Path(option('--output-file') + '.json').write_bytes(result)
         assert job["stage"] == "completed", job
         document = check_result(job["result"], url)
         assert request("GET", path + "/document") == document
+        summary = request("POST", path + "/summary", {})
+        assert summary["markdown"] == "# Notes\n\nVideo summary at [00:00:01]."
+        assert summary["source"] == document["source"]
+        markdown = root / "summary.md"
+        run(binary, "summarize", job["result"]["document"], "--config", str(summary_config),
+            "--output", str(markdown))
+        assert markdown.read_text() == summary["markdown"]
 
         # CLI uses the same result contract and preserves previous output on a repeated request.
         output = run(binary, "video", url, "--config", str(config))

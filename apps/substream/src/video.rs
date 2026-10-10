@@ -140,6 +140,26 @@ pub fn new_job_id() -> Result<String> {
     Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
 }
 
+pub fn read_document(path: &Path) -> Result<VideoDocument> {
+    let mut bytes = Vec::new();
+    fs::File::open(path)
+        .context("open video document")?
+        .take(32 * 1024 * 1024 + 1)
+        .read_to_end(&mut bytes)?;
+    ensure!(
+        bytes.len() <= 32 * 1024 * 1024,
+        "video document exceeds 32 MiB"
+    );
+    let document: VideoDocument =
+        serde_json::from_slice(&bytes).context("invalid video document")?;
+    ensure!(
+        document.schema_version == 1,
+        "unsupported video document version"
+    );
+    document.transcript.validate()?;
+    Ok(document)
+}
+
 pub fn run_video(
     config: &VideoConfig,
     url: &str,
